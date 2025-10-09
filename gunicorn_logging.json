@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "unified-format": {
+      "format": "%(asctime)-23s [%(levelname)s] (%(name)s:%(lineno)d) [%(processName)s] %(message)s"
+    }
+  },
+  "handlers": {
+    "console": {
+      "level": "INFO",
+      "class": "logging.StreamHandler",
+      "formatter": "unified-format"
+    }
+  },
+  "root": {
+    "handlers": [
+      "console"
+    ],
+    "level": "INFO"
+  },
+  "loggers": {
+    "gunicorn.error": {
+      "handlers": [
+        "console"
+      ],
+      "level": "INFO",
+      "propagate": false
+    },
+    "gunicorn.access": {
+      "handlers": [
+        "console"
+      ],
+      "level": "INFO",
+      "propagate": false
+    }
+  }
+}
