@@ -35,7 +35,7 @@ CELERY_LOGGING = {
         'celery': {
             'handlers': ['console_log'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
         },
     },
 }

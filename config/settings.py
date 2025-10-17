@@ -10,24 +10,17 @@ env = environ.Env(
     DJANGO_SECRET_KEY=(
         str, 'django-insecure-j@@b0)u$5*hgnoy02u1)qv6c*nv$%ib@+k(x!58bz229)bb1x#'),
     DJANGO_ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
-    DJANGO_DATABASE_URL=(str, 'sqlite:///path/to/your/database.sqlite3'),
+    DJANGO_DATABASE_URL=(str, 'sqlite:///db.sqlite3'),
     CELERY_BROKER_URL=(str, 'redis://localhost:6379/0'),
     CELERY_RESULT_BACKEND=(str, 'redis://localhost:6379/0'),
 )
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env('DJANGO_ALLOWED_HOSTS')
@@ -83,6 +76,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
+    'default': env.db('VAR_INEXISTENTE', 'sqlite:///db.sqlite3')
+} if DEBUG else {
     'default': env.db('DJANGO_DATABASE_URL'),
 }
 

@@ -1,0 +1,91 @@
+[
+    {
+        "model": "internet_status.InternetProvider",
+        "pk": 1,
+        "fields": {
+            "name": "Claro",
+            "enabled": true,
+            "status_check_interval": 15,
+            "speed_test_interval": 180,
+            "mininum_hosts_to_ping": 3,
+            "status_ping_error_unstable_threshold": 0.3,
+            "status_ping_error_disconnected_threshold": 0.7,
+            "status_ping_success_connected_threshold": 0.8,
+            "download_speed_minimun_threshold": 400.0,
+            "download_speed_expected_threshold": 600.0,
+            "upload_speed_minimum_threshold": 80.0,
+            "upload_speed_expected_threshold": 120.0,
+            "id_provider_speedtest": "18526"
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 1,
+        "fields": {
+            "name": "Google DNS",
+            "hostname_or_ipaddress": "8.8.8.8",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 2,
+        "fields": {
+            "name": "Cloudflare DNS",
+            "hostname_or_ipaddress": "1.1.1.1",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 3,
+        "fields": {
+            "name": "stackoverflow",
+            "hostname_or_ipaddress": "stackoverflow.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 4,
+        "fields": {
+            "name": "Claro website",
+            "hostname_or_ipaddress": "www.claro.com.br",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 5,
+        "fields": {
+            "name": "UOL",
+            "hostname_or_ipaddress": "uol.com.br",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 6,
+        "fields": {
+            "name": "g1.com",
+            "hostname_or_ipaddress": "g1.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 7,
+        "fields": {
+            "name": "GitHub",
+            "hostname_or_ipaddress": "github.com",
+            "enabled": true,
+            "provider": 1
+        }
+    }
+]

@@ -4,47 +4,51 @@ import json
 from django_celery_beat.models import PeriodicTask, CrontabSchedule, IntervalSchedule
 from django.conf import settings
 
+from internet_status.models import InternetProvider
+
 logger = logging.getLogger(__name__)
 
+# TODO Ler intervalos do banco de dados (InternetProvider)
 
-# TODO Configurar corretamente os horários de execução das tarefas.
 
 def start():
     """
     Cria ou atualiza as tarefas periódicas no banco de dados.
     """
-    logger.info("(Internet Status) Iniciando agendador de tarefas...")
+    logger.info("Agendando tarefas do módulo Internet Status...")
 
-    schedule_interval, _ = IntervalSchedule.objects.get_or_create(
-        every=11,
-        period=IntervalSchedule.SECONDS,
-    )
+    # TODO Testar
+    try:
+        providers: list[InternetProvider] = InternetProvider.objects.filter(
+            enabled=True).prefetch_related('hosts_to_ping')
+        for provider in providers:
+            schedule_status, _ = IntervalSchedule.objects.get_or_create(
+                every=provider.status_check_interval,
+                period=IntervalSchedule.MINUTES
+            )
+            PeriodicTask.objects.update_or_create(
+                name=f'[{provider.name}] Check Internet Status',
+                defaults={
+                    'task': 'internet_status.check_internet_status',
+                    'interval': schedule_status,
+                    'enabled': True,
+                }
+            )
 
-    PeriodicTask.objects.update_or_create(
-        name='Check Internet Status',
-        defaults={
-            'task': 'internet_status.check_internet_status',
-            'interval': schedule_interval,
-            'enabled': True,
-        }
-    )
+            schedule_speed, _ = IntervalSchedule.objects.get_or_create(
+                every=provider.speed_test_interval,
+                period=IntervalSchedule.MINUTES
+            )
 
-    schedule_crontab, _ = CrontabSchedule.objects.get_or_create(
-        minute='1',      # Todo minuto
-        hour='*',        # Toda hora
-        day_of_week='*',  # Todo dia da semana
-        day_of_month='*',  # Todo dia do mês
-        month_of_year='*',  # Todo mês do ano
-        timezone=settings.TIME_ZONE
-    )
+            PeriodicTask.objects.update_or_create(
+                name=f'[{provider.name}] Check Internet Speed',
+                defaults={
+                    'task': 'internet_status.check_internet_speed',
+                    'interval': schedule_speed,
+                    'enabled': True,
+                }
+            )
 
-    PeriodicTask.objects.update_or_create(
-        name='Check Internet Speed',
-        defaults={
-            'task': 'periodic_cleainternet_status.check_internet_speednup',
-            'crontab': schedule_crontab,
-            'enabled': True,
-        }
-    )
-
-    logger.info("(Internet Status) Agendador de tarefas finalizado.")
+    except Exception as ex:
+        logger.error(f"Erro agendando tarefas do módulo Internet Status: {ex}")
+        raise ex
