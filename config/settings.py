@@ -161,6 +161,7 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'django-format',
+            'stream': 'ext://sys.stdout',
         },
     },
     'loggers': {
