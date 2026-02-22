@@ -21,18 +21,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    container_name: redis
-    hostname: redis
-    image: "redis:8.2-bookworm"
-    networks:
-      - internal_net
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   django:
     container_name: django
     hostname: django
@@ -49,8 +37,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/admin/login/" ]
       start_period: 30s
@@ -59,51 +45,59 @@ services:
       timeout: 30s
       retries: 10
 
-  celery-worker:
-    container_name: celery-worker
-    hostname: celery-worker
+  django-worker:
+    container_name: django-worker
+    hostname: django-worker
+    build:
+      context: .
+      dockerfile: Containerfile
     image: home-services-appserver:latest
-    command: celery -A $CELERY_APP_NAME worker -l info
+    command: python manage.py db_worker
     env_file:
       - .env
     networks:
+      - public_net
       - internal_net
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       django:
         condition: service_healthy
     healthcheck:
-      test: |
-        export HOST_CELERY=$(celery -A $CELERY_APP_NAME status | grep celery | sed -e 's/->  //' -e 's/: OK//') &&
-        celery -A $CELERY_APP_NAME inspect ping --destination $$HOST_CELERY
-      start_period: 10s
-      interval: 10s
+      test: ["CMD-SHELL", "ps -ef | grep '[d]b_worker' || exit 1"]
+      start_period: 30s
+      start_interval: 10s
+      interval: 30s
       timeout: 10s
-      retries: 50
+      retries: 10
 
-  celery-beat:
-    container_name: celery-beat
-    hostname: celery-beat
+  django-scheduler:
+    container_name: django-scheduler
+    hostname: django-scheduler
+    build:
+      context: .
+      dockerfile: Containerfile
     image: home-services-appserver:latest
-    command: celery -A $CELERY_APP_NAME beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: python manage.py scheduler
     env_file:
       - .env
     networks:
+      - public_net
       - internal_net
     depends_on:
-      celery-worker:
+      postgres:
+        condition: service_healthy
+      django:
+        condition: service_healthy
+      django-worker:
         condition: service_healthy
     healthcheck:
-      test: |
-        export HOST_CELERY=$(celery -A $CELERY_APP_NAME status | grep celery | sed -e 's/->  //' -e 's/: OK//') &&
-        celery -A $CELERY_APP_NAME inspect ping --destination $$HOST_CELERY
-      start_period: 10s
-      interval: 10s
+      test: ["CMD-SHELL", "find /tmp/scheduler_heartbeat.txt -mmin -1 | grep -q . || exit 1"]
+      start_period: 30s
+      start_interval: 10s
+      interval: 30s
       timeout: 10s
-      retries: 50
+      retries: 10
 
   nginx:
     container_name: nginx

@@ -1,8 +1,10 @@
 from django.urls import path
+
 from . import views
 
-app_name = 'internet_status'  # Optional: set an app_name for namespacing
+
+app_name = 'internet_status'
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    path('provider/<int:provider_id>/', views.provider_details, name='details'),
 ]

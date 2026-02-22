@@ -89,7 +89,7 @@ class InternetCheck(metaclass=SingletonMeta):
         # Adiciona informações de cálculo e thresholds ao resultado
         result_data['thresholds'] = {
             'provider_config': {
-                'mininum_hosts_to_ping': provider.mininum_hosts_to_ping,
+                'minimum_hosts_to_ping': provider.minimum_hosts_to_ping,
                 'status_ping_error_unstable_threshold': float(provider.status_ping_error_unstable_threshold),
                 'status_ping_error_disconnected_threshold': float(provider.status_ping_error_disconnected_threshold),
                 'status_ping_success_connected_threshold': float(provider.status_ping_success_connected_threshold),
@@ -105,11 +105,11 @@ class InternetCheck(metaclass=SingletonMeta):
         }
 
         # Verifica a quantidade mínima de hosts para ping
-        if total_hosts < provider.mininum_hosts_to_ping:
+        if total_hosts < provider.minimum_hosts_to_ping:
             result_status = StatusChoices.UNKNOWN
             result_data['thresholds']['reason'] = (
                 f"Número de hosts ({total_hosts}) "
-                f"inferior ao mínimo exigido ({provider.mininum_hosts_to_ping})."
+                f"inferior ao mínimo exigido ({provider.minimum_hosts_to_ping})."
             )
             return result_status, result_data
 
@@ -176,7 +176,7 @@ class InternetCheck(metaclass=SingletonMeta):
             'test_result': {},
             'thresholds': {
                 'provider_config': {
-                    'download_speed_minimun_threshold': provider.download_speed_minimun_threshold,
+                    'download_speed_minimum_threshold': provider.download_speed_minimum_threshold,
                     'download_speed_expected_threshold': provider.download_speed_expected_threshold,
                     'upload_speed_minimum_threshold': provider.upload_speed_minimum_threshold,
                     'upload_speed_expected_threshold': provider.upload_speed_expected_threshold,
@@ -190,8 +190,8 @@ class InternetCheck(metaclass=SingletonMeta):
             try:
                 st.get_servers(servers=[provider.id_provider_speedtest])
             except speedtest.NoMatchedServers:
+                st.get_servers([])
                 st.get_best_server()
-
             st.download()
             st.upload()
             test_results = st.results.dict()

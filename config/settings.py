@@ -1,6 +1,9 @@
 import environ
+import logging
 import os
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 
@@ -11,8 +14,6 @@ env = environ.Env(
         str, 'django-insecure-j@@b0)u$5*hgnoy02u1)qv6c*nv$%ib@+k(x!58bz229)bb1x#'),
     DJANGO_ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
     DJANGO_DATABASE_URL=(str, 'sqlite:///db.sqlite3'),
-    CELERY_BROKER_URL=(str, 'redis://localhost:6379/0'),
-    CELERY_RESULT_BACKEND=(str, 'redis://localhost:6379/0'),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,9 +37,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'django_celery_beat',
-    'internet_status',
+    'django_tasks_db',
     'core',
+    'internet_status',
 ]
 
 MIDDLEWARE = [
@@ -75,12 +76,14 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': env.db('VAR_INEXISTENTE', 'sqlite:///db.sqlite3')
-} if DEBUG else {
-    'default': env.db('DJANGO_DATABASE_URL'),
-}
-
+if DEBUG:
+    DATABASES = {
+        'default': env.db_url_config('sqlite:///db.sqlite3')
+    }
+else:
+    DATABASES = {
+        'default': env.db('DJANGO_DATABASE_URL'),
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -106,42 +109,11 @@ STORAGES = {
     },
 }
 
-LOG_LEVEL = env('LOG_LEVEL', default='INFO')
-
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'django-format': {
-            'format': '%(asctime)-23s [%(levelname)s] (%(name)s:%(lineno)d) [%(processName)s] - %(message)s',
-        }
-    },
-    'handlers': {},
-    'loggers': {
-        'root': {
-            'level': 'INFO',
-        },
-        'django': {
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'celery': {
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'config': {
-            'level': LOG_LEVEL,
-            'propagate': True,
-        },
-        'core': {
-            'level': LOG_LEVEL,
-            'propagate': True,
-        },
-        'internet_status': {
-            'level': LOG_LEVEL,
-            'propagate': True,
-        },
-    },
+# Configuração do novo sistema de tasks
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+    }
 }
 
 # Internationalization
@@ -151,24 +123,80 @@ TIME_ZONE = env('TZ')
 USE_I18N = True
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_ROOT = BASE_DIR / 'static'
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# TIME_ZONE já deve estar definido acima no seu settings.py (TIME_ZONE = env('TZ'))
+
+
+class LocalTimeFormatter(logging.Formatter):
+    """Força o logging a usar o TIME_ZONE do Django, ignorando o relógio do SO."""
+
+    def converter(self, timestamp):
+        dt = datetime.fromtimestamp(timestamp, tz=ZoneInfo(TIME_ZONE))
+        return dt.timetuple()
+
+
+LOG_LEVEL = env('LOG_LEVEL', default='INFO')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'django-format': {
+            '()': LocalTimeFormatter,
+            'format': '%(asctime)-23s [%(levelname)s] (%(name)s:%(lineno)d) [%(processName)s] - %(message)s',
+        }
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'django-format',
+        },
+    },
+    'loggers': {
+        'root': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django_tasks': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'config': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'internet_status': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+    },
+}
 
 # --- Configurações para Reverse Proxy (Nginx) ---
 # Confia nos cabeçalhos enviados pelo proxy
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Celery Configuration
-CELERY_BROKER_URL = env("CELERY_BROKER_URL")
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND")
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

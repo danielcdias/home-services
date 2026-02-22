@@ -12,7 +12,7 @@ class InternetProvider(models.Model):
     speed_test_interval = models.IntegerField(
         null=False,
         help_text="Interval in minutes to perform speed tests")
-    mininum_hosts_to_ping = models.IntegerField(
+    minimum_hosts_to_ping = models.IntegerField(
         null=False,
         help_text="Minimum number of hosts to ping for status checks", default=3)
     status_ping_error_unstable_threshold = models.DecimalField(
@@ -45,7 +45,7 @@ class InternetProvider(models.Model):
         ],
         null=False,
         help_text="Percentage of hosts with successful ping to mark connection as connected")
-    download_speed_minimun_threshold = models.FloatField(
+    download_speed_minimum_threshold = models.FloatField(
         validators=[
             MinValueValidator(1.0),  # Minimum allowed value
             MaxValueValidator(10000.0)  # Maximum allowed value
@@ -82,15 +82,18 @@ class InternetProvider(models.Model):
 
 
 class HostsToPing(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
     hostname_or_ipaddress = models.CharField(
-        max_length=255, unique=True, help_text="Hostname or IP address to ping")
+        max_length=255, help_text="Hostname or IP address to ping")
     enabled = models.BooleanField(default=True)
     provider = models.ForeignKey(
         InternetProvider, on_delete=models.CASCADE, related_name='hosts_to_ping')
 
     def __str__(self):
         return f"{self.hostname_or_ipaddress} ({'Enabled' if self.enabled else 'Disabled'})"
+
+    class Meta:
+        unique_together = ['provider', 'hostname_or_ipaddress']
 
 
 class StatusChoices(models.TextChoices):
@@ -104,7 +107,7 @@ class ConnectionStatus(models.Model):
 
     status = models.CharField(
         max_length=20, choices=StatusChoices, default='unknown')
-    last_checked = models.DateTimeField(auto_now=True)
+    last_checked = models.DateTimeField(auto_now_add=True)
     ping_results = models.JSONField(
         help_text="Ping results for the last check, including hosts with success and error.")
     provider = models.ForeignKey(
@@ -118,11 +121,12 @@ class ConnectionSpeed(models.Model):
     download_speed = models.FloatField(help_text="Download speed in Mbps")
     upload_speed = models.FloatField(help_text="Upload speed in Mbps")
     latency = models.FloatField(help_text="Latency in ms")
-    last_tested = models.DateTimeField(auto_now=True)
+    last_tested = models.DateTimeField(auto_now_add=True)
     full_results = models.JSONField(
         help_text="Full results from the speed test")
     provider = models.ForeignKey(
         InternetProvider, on_delete=models.CASCADE, related_name='connection_speeds')
 
-    def __str__(self):
-        return f"Download: {self.download_speed} Mbps, Upload: {self.upload_speed} Mbps, Ping: {self.ping} ms (Last tested: {self.last_tested})"
+
+def __str__(self):
+    return f"Download: {self.download_speed} Mbps, Upload: {self.upload_speed} Mbps, Latency: {self.latency} ms (Last tested: {self.last_tested})"

@@ -1,0 +1,22 @@
+/* Paleta de cores da marca */
+.bg-brand-primary {
+    background-color: #171d61;
+}
+
+.navbar-logo {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+}
+
+/* Efeito sutil de pulso para os badges de status */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.8; }
+    100% { opacity: 1; }
+}
+
+.pulse-indicator {
+    animation: pulse 2s infinite;
+    letter-spacing: 0.5px;
+}

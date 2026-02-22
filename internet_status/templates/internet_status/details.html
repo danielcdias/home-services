@@ -1,0 +1,90 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}
+  Detalhes: {{ provider.name }} | Home Services
+{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12 d-flex align-items-center">
+      <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
+      <h2 class="mb-0">Histórico: {{ provider.name }}</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 mb-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white pt-3 pb-2">
+          <h5 class="card-title fw-bold">Desempenho de Banda (Download / Upload)</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="speedChart" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 mb-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white pt-3 pb-2">
+          <h5 class="card-title fw-bold">Estabilidade da Ligação (% de Sucesso no Ping)</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="pingChart" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 mb-5">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-danger text-white pt-3 pb-2">
+          <h5 class="card-title fw-bold mb-0">Últimas Instabilidades ou Quedas Registadas</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="px-4">Data e Hora</th>
+                  <th>Estado</th>
+                  <th>Motivo Diagnosticado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for failure in recent_failures %}
+                  <tr>
+                    <td class="px-4 fw-medium">{{ failure.last_checked|date:'d/m/Y às H:i:s' }}</td>
+                    <td>
+                      {% if failure.status == 'disconnected' %}
+                        <span class="badge bg-danger">Desconectado</span>
+                      {% elif failure.status == 'unstable' %}
+                        <span class="badge bg-warning text-dark">Instável</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Desconhecido</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ failure.ping_results.thresholds.reason|default:'Motivo não especificado no registo.' }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="3" class="text-center py-4 text-muted">Excelente! Não foram detetadas falhas recentes nesta ligação.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{ ping_labels|json_script:'pingLabels' }}
+  {{ ping_success_rates|json_script:'pingData' }}
+  {{ speed_labels|json_script:'speedLabels' }}
+  {{ download_data|json_script:'downloadData' }}
+  {{ upload_data|json_script:'uploadData' }}
+
+  <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
+  <script src="{% static 'internet_status/js/details.js' %}"></script>
+{% endblock %}

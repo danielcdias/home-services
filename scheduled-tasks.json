@@ -1,0 +1,14 @@
+[
+  {
+    "task": "internet_status.tasks.check_internet_status",
+    "type": "interval",
+    "unit": "minutes",
+    "value": 5
+  },
+  {
+    "task": "internet_status.tasks.check_internet_speed",
+    "type": "interval",
+    "unit": "hours",
+    "value": 1
+  }
+]
