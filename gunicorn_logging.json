@@ -10,7 +10,8 @@
     "console": {
       "level": "INFO",
       "class": "logging.StreamHandler",
-      "formatter": "unified-format"
+      "formatter": "unified-format",
+      "stream": "ext://sys.stdout"
     }
   },
   "root": {
