@@ -157,7 +157,7 @@ LOGGING = {
         }
     },
     'handlers': {
-        'console': {
+        'console_stdout': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'django-format',
@@ -166,36 +166,36 @@ LOGGING = {
     },
     'loggers': {
         'root': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': 'INFO',
         },
         'django': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': 'INFO',
             'propagate': False,
         },
         'django.server': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': 'INFO',
             'propagate': False,
         },
         'django_tasks': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': 'INFO',
             'propagate': False,
         },
         'config': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
         'core': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
         'internet_status': {
-            'handlers': ['console'],
+            'handlers': ['console_stdout'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
