@@ -15,9 +15,6 @@ services:
     networks:
       - reverse_proxy_net
       - db_net
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/admin/login/" ]
       start_period: 30s
@@ -39,8 +36,6 @@ services:
     networks:
       - db_net
     depends_on:
-      postgres:
-        condition: service_healthy
       django:
         condition: service_healthy
     healthcheck:
@@ -64,8 +59,6 @@ services:
     networks:
       - db_net
     depends_on:
-      postgres:
-        condition: service_healthy
       django:
         condition: service_healthy
       django-worker:
