@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 
 
+LOCAL_DEV_ENV = os.environ.get('DEV_ENV', False)
+
 env = environ.Env(
     DEBUG=(bool, False),
     TZ=(str, 'America/Sao_Paulo'),
@@ -18,7 +20,10 @@ env = environ.Env(
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+environ.Env.read_env(os.path.join(
+    BASE_DIR,
+    '.env.local_dev' if LOCAL_DEV_ENV else '.env')
+)
 
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
@@ -76,7 +81,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if DEBUG:
+if LOCAL_DEV_ENV:
     DATABASES = {
         'default': env.db_url_config('sqlite:///db.sqlite3')
     }

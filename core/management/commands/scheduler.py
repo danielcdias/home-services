@@ -1,4 +1,5 @@
 import json
+import os
 import schedule
 import time
 
@@ -12,10 +13,12 @@ class Command(BaseCommand):
     help = 'Executa o agendador de tarefas dinâmico baseado em JSON'
 
     def handle(self, *args, **options):
-        heartbeat_file = settings.BASE_DIR / \
-            'scheduled-tasks.json' if settings.DEBUG else Path(
-                '/tmp/scheduler_heartbeat.txt')
+        heartbeat_file = Path(settings.BASE_DIR /
+                              'scheduler_heartbeat.lock') if settings.LOCAL_DEV_ENV else Path('/tmp/scheduler_heartbeat.lock')
         json_path = settings.BASE_DIR / 'scheduled-tasks.json'
+
+        if os.path.exists(heartbeat_file):
+            os.remove(heartbeat_file)
 
         if not json_path.exists():
             raise CommandError(
@@ -34,9 +37,8 @@ class Command(BaseCommand):
                 # Importa a função da task dinamicamente a partir da string
                 task_func = import_string(task_path)
             except ImportError as ex:
-                self.stdout.write(self.style.ERROR(
-                    f"Falha ao importar a tarefa: {task_path}, exceção: {ex}"))
-                continue
+                raise CommandError(
+                    f"Falha ao importar a tarefa: {task_path}, exceção: {ex}")
 
             sched_type = config.get('type')
 

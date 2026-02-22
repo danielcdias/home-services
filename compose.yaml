@@ -7,6 +7,8 @@ services:
     image: "postgres:18-trixie"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env
     environment:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
@@ -64,9 +66,9 @@ services:
       django:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "ps -ef | grep '[d]b_worker' || exit 1"]
-      start_period: 30s
-      start_interval: 10s
+      test: ["CMD-SHELL", "grep -qa 'db_worker' /proc/[1-9]*/cmdline 2>/dev/null || exit 1"]
+      start_period: 5s
+      start_interval: 5s
       interval: 30s
       timeout: 10s
       retries: 10
@@ -92,9 +94,9 @@ services:
       django-worker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "find /tmp/scheduler_heartbeat.txt -mmin -1 | grep -q . || exit 1"]
-      start_period: 30s
-      start_interval: 10s
+      test: ["CMD-SHELL", "find /tmp/scheduler_heartbeat.lock -mmin -1 | grep -q . || exit 1"]
+      start_period: 5s
+      start_interval: 5s
       interval: 30s
       timeout: 10s
       retries: 10
