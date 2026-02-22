@@ -15,6 +15,7 @@ services:
     networks:
       - reverse_proxy_net
       - db_net
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/admin/login/" ]
       start_period: 30s
@@ -38,6 +39,7 @@ services:
     depends_on:
       django:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "grep -qa 'db_worker' /proc/[1-9]*/cmdline 2>/dev/null || exit 1"]
       start_period: 5s
@@ -63,6 +65,7 @@ services:
         condition: service_healthy
       django-worker:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "find /tmp/scheduler_heartbeat.lock -mmin -1 | grep -q . || exit 1"]
       start_period: 5s
