@@ -1,90 +1,153 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}
-  Detalhes: {{ provider.name }} | Home Services
-{% endblock %}
+{% block title %}Detalhes: {{ provider.name }} | Home Services{% endblock %}
 
 {% block content %}
-  <div class="row mb-4">
-    <div class="col-12 d-flex align-items-center">
-      <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
-      <h2 class="mb-0">Histórico: {{ provider.name }}</h2>
+<div class="row mb-4 align-items-center">
+    <div class="col-md-6 d-flex align-items-center">
+        <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
+        <h2 class="mb-0">Desempenho: {{ provider.name }}</h2>
     </div>
-  </div>
+</div>
 
-  <div class="row">
+<div class="row">
     <div class="col-12 mb-4">
-      <div class="card shadow-sm border-0">
-        <div class="card-header bg-white pt-3 pb-2">
-          <h5 class="card-title fw-bold">Desempenho de Banda (Download / Upload)</h5>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white pt-3 pb-2">
+                <h5 class="card-title fw-bold">Desempenho de Banda (Download / Upload)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="speedChart" height="80"></canvas>
+            </div>
         </div>
-        <div class="card-body">
-          <canvas id="speedChart" height="80"></canvas>
-        </div>
-      </div>
     </div>
 
     <div class="col-12 mb-4">
-      <div class="card shadow-sm border-0">
-        <div class="card-header bg-white pt-3 pb-2">
-          <h5 class="card-title fw-bold">Estabilidade da Ligação (% de Sucesso no Ping)</h5>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white pt-3 pb-2">
+                <h5 class="card-title fw-bold">Estabilidade da Ligação (% de Sucesso no Ping)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="pingChart" height="60"></canvas>
+            </div>
         </div>
-        <div class="card-body">
-          <canvas id="pingChart" height="60"></canvas>
+    </div>
+</div>
+
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-danger text-white pt-3 pb-2">
+                <h5 class="card-title fw-bold mb-0">Últimas Instabilidades ou Quedas</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4">Data e Hora</th>
+                                <th>Estado</th>
+                                <th>Motivo Diagnosticado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for failure in recent_failures %}
+                            <tr>
+                                <td class="px-4 fw-medium">{{ failure.last_checked|date:"d/m/Y às H:i:s" }}</td>
+                                <td>
+                                    {% if failure.status == 'disconnected' %}
+                                        <span class="badge bg-danger">Desconectado</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Instável</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">{{ failure.ping_results.thresholds.reason|default:"Falha geral" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center py-4 text-muted">Sem falhas recentes!</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-      </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+    <h4 class="fw-bold mb-0">Relatório Consolidado</h4>
+    
+    <form method="GET" class="d-flex align-items-center gap-2">
+        <select name="month" class="form-select" onchange="this.form.submit()">
+            {% for m in available_months %}
+                <option value="{{ m.month }}" {% if m.month == selected_month and m.year == selected_year %}selected{% endif %}>
+                    {{ m.label }}
+                </option>
+            {% endfor %}
+        </select>
+        <input type="hidden" name="year" value="{{ selected_year }}">
+        
+        <button type="button" id="btn-gerar-pdf" class="btn btn-danger shadow-sm text-nowrap">
+            📄 Baixar PDF
+        </button>
+    </form>
+</div>
+
+<div id="relatorio-conteudo" class="bg-white p-4 rounded shadow-sm mb-5 border">
+    <div class="text-center mb-4">
+        <h3 class="fw-bold text-uppercase">Relatório de Qualidade de Serviço</h3>
+        <p class="text-muted">Provedor: <strong>{{ provider.name }}</strong> | Período: {{ selected_label }}</p>
     </div>
 
-    <div class="col-12 mb-5">
-      <div class="card shadow-sm border-0">
-        <div class="card-header bg-danger text-white pt-3 pb-2">
-          <h5 class="card-title fw-bold mb-0">Últimas Instabilidades ou Quedas Registadas</h5>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover table-striped mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th class="px-4">Data e Hora</th>
-                  <th>Estado</th>
-                  <th>Motivo Diagnosticado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for failure in recent_failures %}
-                  <tr>
-                    <td class="px-4 fw-medium">{{ failure.last_checked|date:'d/m/Y às H:i:s' }}</td>
-                    <td>
-                      {% if failure.status == 'disconnected' %}
-                        <span class="badge bg-danger">Desconectado</span>
-                      {% elif failure.status == 'unstable' %}
-                        <span class="badge bg-warning text-dark">Instável</span>
-                      {% else %}
-                        <span class="badge bg-secondary">Desconhecido</span>
-                      {% endif %}
-                    </td>
-                    <td class="text-muted small">{{ failure.ping_results.thresholds.reason|default:'Motivo não especificado no registo.' }}</td>
-                  </tr>
-                {% empty %}
-                  <tr>
-                    <td colspan="3" class="text-center py-4 text-muted">Excelente! Não foram detetadas falhas recentes nesta ligação.</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
+    <div class="mb-5">
+        <h5 class="fw-bold border-bottom pb-2">Evolução Diária Média (Velocidade vs Estabilidade)</h5>
+        <canvas id="monthlyChart" height="100"></canvas>
+    </div>
+
+    <div>
+        <h5 class="fw-bold border-bottom pb-2">Medições Consolidadas (Dia a Dia)</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-striped text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Data</th>
+                        <th>Download Médio (Mbps)</th>
+                        <th>Upload Médio (Mbps)</th>
+                        <th>Taxa de Sucesso no Ping (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in monthly_table_data %}
+                    <tr>
+                        <td class="fw-bold">{{ row.date }}</td>
+                        <td class="{% if row.avg_down < 50 %}text-danger fw-bold{% endif %}">{{ row.avg_down }}</td>
+                        <td class="{% if row.avg_up < 20 %}text-danger fw-bold{% endif %}">{{ row.avg_up }}</td>
+                        <td class="{% if row.avg_ping < 98 %}text-danger fw-bold{% endif %}">{{ row.avg_ping }}%</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="py-3">Nenhum registo efetuado neste mês.</td></tr>
+                    {% endfor %}
+                </tbody>
             </table>
-          </div>
+            <small class="text-muted d-block mt-2">* Valores em vermelho indicam dias com métricas possivelmente abaixo do contratado.</small>
         </div>
-      </div>
     </div>
-  </div>
+</div>
 
-  {{ ping_labels|json_script:'pingLabels' }}
-  {{ ping_success_rates|json_script:'pingData' }}
-  {{ speed_labels|json_script:'speedLabels' }}
-  {{ download_data|json_script:'downloadData' }}
-  {{ upload_data|json_script:'uploadData' }}
+{{ ping_labels|json_script:"pingLabels" }}
+{{ ping_success_rates|json_script:"pingData" }}
+{{ speed_labels|json_script:"speedLabels" }}
+{{ download_data|json_script:"downloadData" }}
+{{ upload_data|json_script:"uploadData" }}
 
-  <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
-  <script src="{% static 'internet_status/js/details.js' %}"></script>
+{{ monthly_labels|json_script:"monthlyLabels" }}
+{{ monthly_down|json_script:"monthlyDown" }}
+{{ monthly_up|json_script:"monthlyUp" }}
+{{ monthly_ping|json_script:"monthlyPing" }}
+{{ filename_label|json_script:"filenameLabel" }}
+
+<script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
+<script src="{% static 'internet_status/js/html2pdf.bundle.min.js' %}"></script>
+<script src="{% static 'internet_status/js/details.js' %}"></script>
 {% endblock %}
