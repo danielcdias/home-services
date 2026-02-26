@@ -9,7 +9,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return element ? JSON.parse(element.textContent) : 'atual';
     }
 
+    // ==========================================
     // 1. Gráficos Recentes
+    // ==========================================
     const speedLabels = getDjangoData('speedLabels');
     const downloadData = getDjangoData('downloadData');
     const uploadData = getDjangoData('uploadData');
@@ -25,7 +27,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     { label: 'Upload (Mbps)', data: uploadData, borderColor: '#0dcaf0', backgroundColor: 'transparent', tension: 0.3 }
                 ]
             },
-            options: { responsive: true } // Mantém a responsividade natural da col-12
+            options: { responsive: true }
         });
     }
 
@@ -43,15 +45,19 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    // ==========================================
     // 2. Gráfico Mensal Combinado
+    // ==========================================
     const monthlyLabels = getDjangoData('monthlyLabels');
     const monthlyDown = getDjangoData('monthlyDown');
     const monthlyUp = getDjangoData('monthlyUp');
     const monthlyPing = getDjangoData('monthlyPing');
     const ctxMonthly = document.getElementById('monthlyChart');
 
+    let monthlyChartInstance = null;
+
     if (ctxMonthly) {
-        new Chart(ctxMonthly, {
+        monthlyChartInstance = new Chart(ctxMonthly, {
             type: 'line',
             data: {
                 labels: monthlyLabels,
@@ -106,30 +112,68 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // 3. Geração do Relatório em PDF com nome dinâmico
+    // ==========================================
+    // 3. Geração do Relatório em PDF (Correção da Captura de Ecrã)
+    // ==========================================
     const btnPdf = document.getElementById('btn-gerar-pdf');
     const filenameLabel = getStringData('filenameLabel');
 
     if (btnPdf) {
         btnPdf.addEventListener('click', function () {
             const btnOriginalText = btnPdf.innerHTML;
-            btnPdf.innerHTML = '⏳ Gerando Documento...';
+            btnPdf.innerHTML = '⏳ Ajustando Layout...';
             btnPdf.disabled = true;
 
             const elementoRelatorio = document.getElementById('relatorio-conteudo');
+            const divTabela = elementoRelatorio.querySelector('.table-responsive');
 
+            // 1. Guarda estado original
+            const originalWidth = elementoRelatorio.style.width;
+            const originalMaxWidth = elementoRelatorio.style.maxWidth;
+
+            // 2. Força exatamente 1000px na div HTML (espaço largo e seguro)
+            elementoRelatorio.style.width = '1000px';
+            elementoRelatorio.style.maxWidth = '1000px';
+
+            // 3. Remove restrições de overflow da tabela
+            if (divTabela) divTabela.classList.remove('table-responsive');
+
+            // 4. Manda o Chart.js preencher os novos 1000px
+            if (monthlyChartInstance) monthlyChartInstance.resize();
+
+            // 5. Opções de captura (Aqui está a grande jogada)
             const opt = {
-                margin: 10,
-                filename: 'Relatorio_Internet_' + filenameLabel + '.pdf', // Aplica o nome dinâmico (ex: 2026_02)
+                margin: 10, // Volta aos 10mm de margem bonita
+                filename: 'Relatorio_Internet_' + filenameLabel + '.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    // Garante que o canvas fotografa exatamente a área de 1000px, ignorando o ecrã
+                    width: 1000,
+                    windowWidth: 1000
+                },
+                // O jsPDF vai pegar nessa imagem de 1000px e esmagá-la perfeitamente para caber num A4
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            html2pdf().set(opt).from(elementoRelatorio).save().then(() => {
-                btnPdf.innerHTML = btnOriginalText;
-                btnPdf.disabled = false;
-            });
+            // 6. Aumentei o timeout para 500ms para dar tempo do gráfico se redesenhar 100%
+            setTimeout(function () {
+                btnPdf.innerHTML = '⏳ Gerando Documento...';
+
+                html2pdf().set(opt).from(elementoRelatorio).save().then(() => {
+                    // 7. Reverte para o estado responsivo da tela
+                    elementoRelatorio.style.width = originalWidth;
+                    elementoRelatorio.style.maxWidth = originalMaxWidth;
+
+                    if (divTabela) divTabela.classList.add('table-responsive');
+                    if (monthlyChartInstance) monthlyChartInstance.resize();
+
+                    btnPdf.innerHTML = btnOriginalText;
+                    btnPdf.disabled = false;
+                });
+            }, 500);
         });
     }
 });
