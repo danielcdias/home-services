@@ -89,5 +89,55 @@
             "enabled": true,
             "provider": 1
         }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 8,
+        "fields": {
+            "name": "Illustration X",
+            "hostname_or_ipaddress": "www.illustrationx.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 9,
+        "fields": {
+            "name": "locoloader.com",
+            "hostname_or_ipaddress": "www.locoloader.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 10,
+        "fields": {
+            "name": "Instagram",
+            "hostname_or_ipaddress": "instagram.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 11,
+        "fields": {
+            "name": "YouTube",
+            "hostname_or_ipaddress": "youtube.com",
+            "enabled": true,
+            "provider": 1
+        }
+    },
+    {
+        "model": "internet_status.HostsToPing",
+        "pk": 12,
+        "fields": {
+            "name": "DeepL",
+            "hostname_or_ipaddress": "www.deepl.com",
+            "enabled": true,
+            "provider": 1
+        }
     }
 ]
