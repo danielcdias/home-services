@@ -113,30 +113,25 @@ class InternetCheck(metaclass=SingletonMeta):
             )
             return result_status, result_data
 
-        # Avalia o status com base nos thresholds, do mais crítico para o melhor
-        if failure_rate >= float(provider.status_ping_error_disconnected_threshold):
-            result_status = StatusChoices.DISCONNECTED
-            result_data['thresholds']['reason'] = (
-                f"Taxa de falha ({failure_rate:.2f}) atingiu ou superou o "
-                f"threshold de desconectado ({provider.status_ping_error_disconnected_threshold})."
-            )
-        elif success_rate >= float(provider.status_ping_success_connected_threshold):
+        if success_rate >= float(provider.status_ping_success_connected_threshold):
             result_status = StatusChoices.CONNECTED
             result_data['thresholds']['reason'] = (
                 f"Taxa de sucesso ({success_rate:.2f}) atingiu ou superou o "
                 f"threshold de conectado ({provider.status_ping_success_connected_threshold})."
             )
-        elif failure_rate >= float(provider.status_ping_error_unstable_threshold):
-            result_status = StatusChoices.UNSTABLE
+        elif failure_rate >= float(provider.status_ping_error_disconnected_threshold):
+            result_status = StatusChoices.DISCONNECTED
             result_data['thresholds']['reason'] = (
                 f"Taxa de falha ({failure_rate:.2f}) atingiu ou superou o "
-                f"threshold de instável ({provider.status_ping_error_unstable_threshold})."
+                f"threshold de desconectado ({provider.status_ping_error_disconnected_threshold})."
             )
         else:
-            result_status = StatusChoices.UNKNOWN
+            # Tudo o que não for perfeito nem crítico será considerado instável,
+            # fechando a lacuna de "unknown".
+            result_status = StatusChoices.UNSTABLE
             result_data['thresholds']['reason'] = (
-                "Os resultados não se enquadraram em nenhum threshold definido "
-                "(Conectado, Desconectado ou Instável)."
+                f"A conexão não atingiu os limites de sucesso ({provider.status_ping_success_connected_threshold}) "
+                f"nem de desconexão total, registando uma taxa de sucesso de {success_rate:.2f}. Classificada como Instável."
             )
 
         return result_status, result_data

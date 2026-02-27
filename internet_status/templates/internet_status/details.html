@@ -58,8 +58,12 @@
                                 <td>
                                     {% if failure.status == 'disconnected' %}
                                         <span class="badge bg-danger">Desconectado</span>
-                                    {% else %}
+                                    {% elif failure.status == 'unstable' %}
                                         <span class="badge bg-warning text-dark">Instável</span>
+                                    {% elif failure.status == 'connected' %}
+                                        <span class="badge bg-success">Conectado</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Desconhecido</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-muted small">{{ failure.ping_results.thresholds.reason|default:"Falha geral" }}</td>
