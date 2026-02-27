@@ -6,6 +6,16 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 class InternetProvider(models.Model):
     name = models.CharField(max_length=255, unique=True)
     enabled = models.BooleanField(default=True)
+    contracted_download_speed = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.0,
+        verbose_name="Download Contratado (Mbps)",
+        help_text="Velocidade de download contratada junto à operadora."
+    )
+    contracted_upload_speed = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.0,
+        verbose_name="Upload Contratado (Mbps)",
+        help_text="Velocidade de upload contratada junto à operadora."
+    )
     status_check_interval = models.IntegerField(
         null=False,
         help_text="Interval in minutes to check the connection status")

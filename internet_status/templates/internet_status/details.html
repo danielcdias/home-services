@@ -1,157 +1,317 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}Detalhes: {{ provider.name }} | Home Services{% endblock %}
+{% block title %}
+  Detalhes: {{ provider.name }} | Home Services
+{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-center">
-    <div class="col-md-6 d-flex align-items-center">
-        <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
-        <h2 class="mb-0">Desempenho: {{ provider.name }}</h2>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white pt-3 pb-2">
-                <h5 class="card-title fw-bold">Desempenho de Banda (Download / Upload)</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="speedChart" height="80"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white pt-3 pb-2">
-                <h5 class="card-title fw-bold">Estabilidade da Ligação (% de Sucesso no Ping)</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="pingChart" height="60"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-5">
-    <div class="col-12">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-danger text-white pt-3 pb-2">
-                <h5 class="card-title fw-bold mb-0">Últimas Instabilidades ou Quedas</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="px-4">Data e Hora</th>
-                                <th>Estado</th>
-                                <th>Motivo Diagnosticado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for failure in recent_failures %}
-                            <tr>
-                                <td class="px-4 fw-medium">{{ failure.last_checked|date:"d/m/Y às H:i:s" }}</td>
-                                <td>
-                                    {% if failure.status == 'disconnected' %}
-                                        <span class="badge bg-danger">Desconectado</span>
-                                    {% elif failure.status == 'unstable' %}
-                                        <span class="badge bg-warning text-dark">Instável</span>
-                                    {% elif failure.status == 'connected' %}
-                                        <span class="badge bg-success">Conectado</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Desconhecido</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-muted small">{{ failure.ping_results.thresholds.reason|default:"Falha geral" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center py-4 text-muted">Sem falhas recentes!</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-    <h4 class="fw-bold mb-0">Relatório Consolidado</h4>
+  <style>
+    /* Estilo para segurar o tamanho na tela */
+    .scrollable-table {
+      max-height: 400px;
+      overflow-y: auto;
+    }
     
-    <form method="GET" class="d-flex align-items-center gap-2">
+    /* ========================================================= */
+    /* MÁGICA DE IMPRESSÃO - Ajustes Profissionais de Layout A4  */
+    /* ========================================================= */
+    @media print {
+      /* Esconde elementos de navegação */
+      .d-print-none {
+        display: none !important;
+      }
+    
+      /* 1. Resolve as tabelas espremidas: Força colunas a 100% da largura da página */
+      .col-md-6,
+      .col-12 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0 !important;
+      }
+    
+      /* 2. Resolve gráficos cortados: Impede que o canvas vaze as margens */
+      canvas {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+    
+      /* 3. Previne cortes de gráficos ou títulos ao meio na troca de página */
+      .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 2rem !important;
+        page-break-inside: avoid !important; /* Nunca quebra o card no meio */
+      }
+    
+      /* Liberta as tabelas para mostrarem todos os dados */
+      .scrollable-table {
+        max-height: none !important;
+        overflow-y: visible !important;
+      }
+    
+      /* Garante as cores de fundo nas badges e barras de título */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    
+      /* Comportamento de tabela para não cortar as linhas a meio */
+      table {
+        page-break-inside: auto;
+        width: 100% !important;
+      }
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      thead {
+        display: table-header-group;
+      } /* Repete o cabeçalho se a tabela mudar de página */
+    
+      /* Limpa fundos do site para poupar tinta e espaço */
+      .bg-light {
+        background-color: transparent !important;
+        padding: 0 !important;
+      }
+      body {
+        background-color: #fff !important;
+      }
+    
+      /* Margens perfeitas para folha A4 vertical */
+      @page {
+        size: A4 portrait;
+        margin: 1cm;
+      }
+    }
+  </style>
+
+  <div class="row mb-4 align-items-center border-bottom pb-3 d-print-none">
+    <div class="col-md-6 d-flex align-items-center">
+      <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
+      <div>
+        <h2 class="mb-0">Painel: {{ provider.name }}</h2>
+        <span class="text-muted small fw-bold">Velocidade Contratada: <span class="text-primary">{{ provider.contracted_download_speed|floatformat:0 }} Mbps ↓</span> / <span class="text-info">{{ provider.contracted_upload_speed|floatformat:0 }} Mbps ↑</span></span>
+      </div>
+    </div>
+
+    <div class="col-md-6 d-flex justify-content-md-end align-items-center gap-2 mt-3 mt-md-0">
+      <a href="{% url 'internet_status:yearly_summary' provider.id %}" class="btn btn-outline-primary text-nowrap">📊 Visão Anual</a>
+
+      <form method="GET" class="d-flex align-items-center gap-2 m-0">
+        <span class="fw-bold">Período:</span>
         <select name="month" class="form-select" onchange="this.form.submit()">
-            {% for m in available_months %}
-                <option value="{{ m.month }}" {% if m.month == selected_month and m.year == selected_year %}selected{% endif %}>
-                    {{ m.label }}
-                </option>
-            {% endfor %}
+          {% for m in available_months %}
+            {% if m.month == selected_month and m.year == selected_year %}
+              <option value="{{ m.month }}" selected>{{ m.label }}</option>
+            {% else %}
+              <option value="{{ m.month }}">{{ m.label }}</option>
+            {% endif %}
+          {% endfor %}
         </select>
-        <input type="hidden" name="year" value="{{ selected_year }}">
-        
-        <button type="button" id="btn-gerar-pdf" class="btn btn-danger shadow-sm text-nowrap">
-            📄 Baixar PDF
-        </button>
-    </form>
-</div>
+        <input type="hidden" name="year" value="{{ selected_year }}" />
+      </form>
 
-<div id="relatorio-conteudo" class="bg-white p-4 rounded shadow-sm mb-5 border">
-    <div class="text-center mb-4">
-        <h3 class="fw-bold text-uppercase">Relatório de Qualidade de Serviço</h3>
-        <p class="text-muted">Provedor: <strong>{{ provider.name }}</strong> | Período: {{ selected_label }}</p>
+      <button type="button" id="btn-gerar-pdf" class="btn btn-danger shadow-sm text-nowrap">📄 Baixar PDF</button>
+    </div>
+  </div>
+
+  <div class="d-none d-print-block mb-4 text-center border-bottom pb-3">
+    <h1 class="fw-bold">Relatório de Qualidade de Internet</h1>
+    <h3 class="text-muted">Provedor: {{ provider.name }}</h3>
+    <p class="mb-0">
+      <strong>Período Analisado:</strong> {{ selected_label }}
+    </p>
+    <p class="mb-0">
+      <strong>Velocidade Contratada:</strong> <span class="text-primary">{{ provider.contracted_download_speed|floatformat:0 }} Mbps ↓</span> / <span class="text-info">{{ provider.contracted_upload_speed|floatformat:0 }} Mbps ↑</span>
+    </p>
+  </div>
+
+  <div id="relatorio-conteudo" class="bg-light p-2 p-md-4 rounded">
+    <div class="row">
+      <div class="col-12 mb-4">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white pt-3 pb-2 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0">Desempenho Médio Diário (Velocidade)</h5>
+          </div>
+          <div class="card-body">
+            <canvas id="speedChart" height="80"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 mb-4">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white pt-3 pb-2 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0">Cumprimento da Velocidade Contratada (% de Testes)</h5>
+          </div>
+          <div class="card-body">
+            <canvas id="speedAchievedChart" height="60"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 mb-4">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white pt-3 pb-2 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0">Estabilidade Diária (Distribuição de Status)</h5>
+          </div>
+          <div class="card-body">
+            <canvas id="pingChart" height="60"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="mb-5">
-        <h5 class="fw-bold border-bottom pb-2">Evolução Diária Média (Velocidade vs Estabilidade)</h5>
-        <canvas id="monthlyChart" height="100"></canvas>
-    </div>
-
-    <div>
-        <h5 class="fw-bold border-bottom pb-2">Medições Consolidadas (Dia a Dia)</h5>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered table-striped text-center">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Data</th>
-                        <th>Download Médio (Mbps)</th>
-                        <th>Upload Médio (Mbps)</th>
-                        <th>Taxa de Sucesso no Ping (%)</th>
-                    </tr>
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-danger text-white pt-3 pb-2">
+            <h5 class="card-title fw-bold mb-0">Instabilidades ou Quedas Registadas em {{ selected_label }}</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive scrollable-table">
+              <table class="table table-hover table-striped mb-0 text-sm">
+                <thead class="table-light position-sticky top-0 shadow-sm">
+                  <tr>
+                    <th class="px-3">Início</th>
+                    <th>Fim</th>
+                    <th>Duração</th>
+                    <th>Estado</th>
+                    <th>Motivo Diagnosticado</th>
+                  </tr>
                 </thead>
                 <tbody>
-                    {% for row in monthly_table_data %}
+                  {% for event in events %}
                     <tr>
-                        <td class="fw-bold">{{ row.date }}</td>
-                        <td class="{% if row.avg_down < 50 %}text-danger fw-bold{% endif %}">{{ row.avg_down }}</td>
-                        <td class="{% if row.avg_up < 20 %}text-danger fw-bold{% endif %}">{{ row.avg_up }}</td>
-                        <td class="{% if row.avg_ping < 98 %}text-danger fw-bold{% endif %}">{{ row.avg_ping }}%</td>
+                      <td class="px-3 fw-medium">{{ event.start|date:'d/m/Y H:i' }}</td>
+                      <td>{{ event.end|date:'d/m/Y H:i' }}</td>
+                      <td class="fw-bold">{{ event.duration }}</td>
+                      <td>
+                        {% if event.status == 'disconnected' %}
+                          <span class="badge bg-danger">Desconectado</span>
+                        {% elif event.status == 'unstable' %}
+                          <span class="badge bg-warning text-dark">Instável</span>
+                        {% else %}
+                          <span class="badge bg-secondary">Desconhecido</span>
+                        {% endif %}
+                      </td>
+                      <td class="text-muted small">{{ event.reason|default:'Falha geral' }}</td>
                     </tr>
-                    {% empty %}
-                    <tr><td colspan="4" class="py-3">Nenhum registo efetuado neste mês.</td></tr>
-                    {% endfor %}
+                  {% empty %}
+                    <tr>
+                      <td colspan="5" class="text-center py-4 text-muted">Sem falhas registadas neste mês! 🎉</td>
+                    </tr>
+                  {% endfor %}
                 </tbody>
-            </table>
-            <small class="text-muted d-block mt-2">* Valores em vermelho indicam dias com métricas possivelmente abaixo do contratado.</small>
+              </table>
+            </div>
+          </div>
         </div>
+      </div>
     </div>
-</div>
 
-{{ ping_labels|json_script:"pingLabels" }}
-{{ ping_success_rates|json_script:"pingData" }}
-{{ speed_labels|json_script:"speedLabels" }}
-{{ download_data|json_script:"downloadData" }}
-{{ upload_data|json_script:"uploadData" }}
+    <div class="row">
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-dark text-white pt-3 pb-2">
+            <h5 class="card-title fw-bold mb-0">Histórico de Velocidade (Completo)</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive scrollable-table">
+              <table class="table table-sm table-striped text-center mb-0">
+                <thead class="table-light position-sticky top-0 shadow-sm">
+                  <tr>
+                    <th>Data / Hora</th>
+                    <th>Download</th>
+                    <th>Upload</th>
+                    <th>Latência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for speed in monthly_speeds %}
+                    <tr>
+                      <td class="small">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
+                      <td class="{% if speed.download_speed < provider.contracted_download_speed %}text-danger fw-bold{% endif %}">{{ speed.download_speed }} Mbps</td>
+                      <td class="{% if speed.upload_speed < provider.contracted_upload_speed %}text-danger fw-bold{% endif %}">{{ speed.upload_speed }} Mbps</td>
+                      <td>{{ speed.latency }} ms</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="4" class="py-3">Sem medições.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
-{{ monthly_labels|json_script:"monthlyLabels" }}
-{{ monthly_down|json_script:"monthlyDown" }}
-{{ monthly_up|json_script:"monthlyUp" }}
-{{ monthly_ping|json_script:"monthlyPing" }}
-{{ filename_label|json_script:"filenameLabel" }}
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-dark text-white pt-3 pb-2">
+            <h5 class="card-title fw-bold mb-0">Histórico de Conectividade (Completo)</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive scrollable-table">
+              <table class="table table-sm table-striped text-center mb-0">
+                <thead class="table-light position-sticky top-0 shadow-sm">
+                  <tr>
+                    <th>Data / Hora</th>
+                    <th>Status</th>
+                    <th>Sucesso/Total (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ping in monthly_pings_list %}
+                    <tr>
+                      <td class="small">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
+                      <td>
+                        {% if ping.status == 'connected' %}
+                          <span class="text-success fw-bold">Conectado</span>
+                        {% elif ping.status == 'unstable' %}
+                          <span class="text-warning fw-bold">Instável</span>
+                        {% elif ping.status == 'disconnected' %}
+                          <span class="text-danger fw-bold">Desconectado</span>
+                        {% else %}
+                          <span class="text-secondary fw-bold">Desconhecido</span>
+                        {% endif %}
+                      </td>
+                      <td class="fw-bold text-muted">{{ ping.successful_pings }}/{{ ping.total_hosts }} ({{ ping.success_rate_pct|floatformat:0 }}%)</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="3" class="py-3">Sem pings executados.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
-<script src="{% static 'internet_status/js/html2pdf.bundle.min.js' %}"></script>
-<script src="{% static 'internet_status/js/details.js' %}"></script>
+  {{ daily_labels|json_script:'dailyLabels' }}
+  {{ daily_down|json_script:'dailyDown' }}
+  {{ daily_up|json_script:'dailyUp' }}
+
+  {{ daily_down_achieved_pct|json_script:'dailyDownAchievedPct' }}
+  {{ daily_down_not_achieved_pct|json_script:'dailyDownNotAchievedPct' }}
+  {{ daily_up_achieved_pct|json_script:'dailyUpAchievedPct' }}
+  {{ daily_up_not_achieved_pct|json_script:'dailyUpNotAchievedPct' }}
+
+  {{ daily_conn_pct|json_script:'dailyConnPct' }}
+  {{ daily_unst_pct|json_script:'dailyUnstPct' }}
+  {{ daily_disc_pct|json_script:'dailyDiscPct' }}
+
+  {{ filename_label|json_script:'filenameLabel' }}
+  {{ contracted_down|json_script:'contractedDown' }}
+  {{ contracted_up|json_script:'contractedUp' }}
+
+  <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
+  <script src="{% static 'internet_status/js/details.js' %}"></script>
 {% endblock %}
