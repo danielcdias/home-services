@@ -5,6 +5,8 @@
         "fields": {
             "name": "Claro",
             "enabled": true,
+            "contracted_download_speed": 600.0,
+            "contracted_upload_speed": 100.0,
             "status_check_interval": 15,
             "speed_test_interval": 180,
             "minimum_hosts_to_ping": 3,

@@ -1,0 +1,152 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}
+  Resumo Anual: {{ provider.name }} | Home Services
+{% endblock %}
+
+{% block content %}
+  <div class="row mb-4 align-items-center border-bottom pb-3">
+    <div class="col-md-6 d-flex align-items-center">
+      <a href="{% url 'internet_status:details' provider.id %}" class="btn btn-outline-secondary me-3">&larr; Voltar ao Detalhe</a>
+      <h2 class="mb-0">Resumo Anual: {{ provider.name }}</h2>
+    </div>
+
+    <div class="col-md-6 d-flex justify-content-md-end mt-3 mt-md-0">
+      <form method="GET" class="d-flex align-items-center gap-2 m-0">
+        <span class="fw-bold">Ano:</span>
+        <select name="year" class="form-select" onchange="this.form.submit()">
+          {% for y in available_years %}
+            {% if y == selected_year %}
+              <option value="{{ y }}" selected>{{ y }}</option>
+            {% else %}
+              <option value="{{ y }}">{{ y }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 mb-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white pt-3 pb-2">
+          <h5 class="card-title fw-bold">Desempenho Médio de Velocidade (Mbps)</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="yearlySpeedChart" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 mb-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white pt-3 pb-2">
+          <h5 class="card-title fw-bold">Cumprimento da Velocidade Contratada (% de Testes)</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="yearlySpeedAchievedChart" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 mb-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white pt-3 pb-2">
+          <h5 class="card-title fw-bold">Estabilidade Anual (Distribuição de Status)</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="yearlyPingChart" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{ month_labels|json_script:'monthLabels' }}
+  {{ monthly_down|json_script:'monthlyDown' }}
+  {{ monthly_up|json_script:'monthlyUp' }}
+
+  {{ monthly_down_achieved_pct|json_script:'monthlyDownAchievedPct' }}
+  {{ monthly_down_not_achieved_pct|json_script:'monthlyDownNotAchievedPct' }}
+  {{ monthly_up_achieved_pct|json_script:'monthlyUpAchievedPct' }}
+  {{ monthly_up_not_achieved_pct|json_script:'monthlyUpNotAchievedPct' }}
+
+  {{ monthly_conn_pct|json_script:'monthlyConnPct' }}
+  {{ monthly_unst_pct|json_script:'monthlyUnstPct' }}
+  {{ monthly_disc_pct|json_script:'monthlyDiscPct' }}
+
+  {{ contracted_down|json_script:'contractedDown' }}
+  {{ contracted_up|json_script:'contractedUp' }}
+
+  <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      function getDjangoData(id) {
+        const el = document.getElementById(id)
+        return el ? JSON.parse(el.textContent) : []
+      }
+    
+      const labels = getDjangoData('monthLabels')
+      const down = getDjangoData('monthlyDown')
+      const up = getDjangoData('monthlyUp')
+    
+      const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0
+      const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0
+      const lineContratadoDown = Array(labels.length).fill(CONTRACTED_DOWN)
+      const lineContratadoUp = Array(labels.length).fill(CONTRACTED_UP)
+    
+      // 1. Velocidade Média
+      new Chart(document.getElementById('yearlySpeedChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Download Médio (Mbps)', data: down, backgroundColor: 'rgba(13, 110, 253, 0.8)' },
+            { label: 'Download Contratado', data: lineContratadoDown, type: 'line', borderColor: '#0d6efd', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 },
+            { label: 'Upload Médio (Mbps)', data: up, backgroundColor: 'rgba(13, 202, 240, 0.8)' },
+            { label: 'Upload Contratado', data: lineContratadoUp, type: 'line', borderColor: '#0dcaf0', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 }
+          ]
+        },
+        options: { responsive: true, interaction: { mode: 'index', intersect: false } }
+      })
+    
+      // 2. Cumprimento de Velocidade (Barras Duplas Empilhadas)
+      const downAchieved = getDjangoData('monthlyDownAchievedPct')
+      const downNotAchieved = getDjangoData('monthlyDownNotAchievedPct')
+      const upAchieved = getDjangoData('monthlyUpAchievedPct')
+      const upNotAchieved = getDjangoData('monthlyUpNotAchievedPct')
+    
+      new Chart(document.getElementById('yearlySpeedAchievedChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Download Atingido (%)', data: downAchieved, backgroundColor: '#0d6efd', stack: 'Stack 0' },
+            { label: 'Download Abaixo (%)', data: downNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 0' },
+            { label: 'Upload Atingido (%)', data: upAchieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
+            { label: 'Upload Abaixo (%)', data: upNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 1' }
+          ]
+        },
+        options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+      })
+    
+      // 3. Estabilidade (Empilhada)
+      const conn = getDjangoData('monthlyConnPct')
+      const unst = getDjangoData('monthlyUnstPct')
+      const disc = getDjangoData('monthlyDiscPct')
+      new Chart(document.getElementById('yearlyPingChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Conectado (%)', data: conn, backgroundColor: '#198754' },
+            { label: 'Instável (%)', data: unst, backgroundColor: '#ffc107' },
+            { label: 'Queda (%)', data: disc, backgroundColor: '#dc3545' }
+          ]
+        },
+        options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+      })
+    })
+  </script>
+{% endblock %}

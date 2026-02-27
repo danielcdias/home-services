@@ -9,171 +9,98 @@ document.addEventListener("DOMContentLoaded", function () {
         return element ? JSON.parse(element.textContent) : 'atual';
     }
 
-    // ==========================================
-    // 1. Gráficos Recentes
-    // ==========================================
-    const speedLabels = getDjangoData('speedLabels');
-    const downloadData = getDjangoData('downloadData');
-    const uploadData = getDjangoData('uploadData');
+    const dailyLabels = getDjangoData('dailyLabels');
 
+    const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
+    const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
+
+    let speedChartInstance = null;
+    let speedAchievedChartInstance = null;
+    let pingChartInstance = null;
+
+    // ==========================================
+    // 1. Gráfico de Velocidade Absoluta
+    // ==========================================
     const ctxSpeed = document.getElementById('speedChart');
     if (ctxSpeed) {
-        new Chart(ctxSpeed, {
+        const dailyDown = getDjangoData('dailyDown');
+        const dailyUp = getDjangoData('dailyUp');
+        const lineContratadoDown = Array(dailyLabels.length).fill(CONTRACTED_DOWN);
+        const lineContratadoUp = Array(dailyLabels.length).fill(CONTRACTED_UP);
+
+        speedChartInstance = new Chart(ctxSpeed, {
             type: 'line',
             data: {
-                labels: speedLabels,
+                labels: dailyLabels,
                 datasets: [
-                    { label: 'Download (Mbps)', data: downloadData, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', fill: true, tension: 0.3 },
-                    { label: 'Upload (Mbps)', data: uploadData, borderColor: '#0dcaf0', backgroundColor: 'transparent', tension: 0.3 }
+                    { label: 'Download Medido', data: dailyDown, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', fill: true, tension: 0.3 },
+                    { label: 'Download Contratado', data: lineContratadoDown, borderColor: '#0d6efd', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 },
+                    { label: 'Upload Medido', data: dailyUp, borderColor: '#0dcaf0', backgroundColor: 'transparent', tension: 0.3 },
+                    { label: 'Upload Contratado', data: lineContratadoUp, borderColor: '#0dcaf0', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 }
                 ]
             },
-            options: { responsive: true }
+            options: { responsive: true, interaction: { mode: 'index', intersect: false } }
         });
     }
 
-    const pingLabels = getDjangoData('pingLabels');
-    const pingData = getDjangoData('pingData');
+    // ==========================================
+    // 2. Gráfico de Cumprimento da Velocidade
+    // ==========================================
+    const ctxSpeedAchieved = document.getElementById('speedAchievedChart');
+    if (ctxSpeedAchieved) {
+        const dailyDownAchieved = getDjangoData('dailyDownAchievedPct');
+        const dailyDownNotAchieved = getDjangoData('dailyDownNotAchievedPct');
+        const dailyUpAchieved = getDjangoData('dailyUpAchievedPct');
+        const dailyUpNotAchieved = getDjangoData('dailyUpNotAchievedPct');
+
+        speedAchievedChartInstance = new Chart(ctxSpeedAchieved, {
+            type: 'bar',
+            data: {
+                labels: dailyLabels,
+                datasets: [
+                    { label: 'Download Atingido (%)', data: dailyDownAchieved, backgroundColor: '#0d6efd', stack: 'Stack 0' },
+                    { label: 'Download Abaixo (%)', data: dailyDownNotAchieved, backgroundColor: '#dc3545', stack: 'Stack 0' },
+                    { label: 'Upload Atingido (%)', data: dailyUpAchieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
+                    { label: 'Upload Abaixo (%)', data: dailyUpNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 1' }
+                ]
+            },
+            options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+        });
+    }
+
+    // ==========================================
+    // 3. Gráfico de Estabilidade
+    // ==========================================
     const ctxPing = document.getElementById('pingChart');
     if (ctxPing) {
-        new Chart(ctxPing, {
-            type: 'line',
+        const dailyConnPct = getDjangoData('dailyConnPct');
+        const dailyUnstPct = getDjangoData('dailyUnstPct');
+        const dailyDiscPct = getDjangoData('dailyDiscPct');
+
+        pingChartInstance = new Chart(ctxPing, {
+            type: 'bar',
             data: {
-                labels: pingLabels,
-                datasets: [{ label: 'Sucesso Ping (%)', data: pingData, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.2)', fill: true, stepped: true }]
-            },
-            options: { responsive: true, scales: { y: { min: 0, max: 100 } } }
-        });
-    }
-
-    // ==========================================
-    // 2. Gráfico Mensal Combinado
-    // ==========================================
-    const monthlyLabels = getDjangoData('monthlyLabels');
-    const monthlyDown = getDjangoData('monthlyDown');
-    const monthlyUp = getDjangoData('monthlyUp');
-    const monthlyPing = getDjangoData('monthlyPing');
-    const ctxMonthly = document.getElementById('monthlyChart');
-
-    let monthlyChartInstance = null;
-
-    if (ctxMonthly) {
-        monthlyChartInstance = new Chart(ctxMonthly, {
-            type: 'line',
-            data: {
-                labels: monthlyLabels,
+                labels: dailyLabels,
                 datasets: [
-                    {
-                        label: 'Download Médio (Mbps)',
-                        data: monthlyDown,
-                        borderColor: '#0d6efd',
-                        backgroundColor: '#0d6efd',
-                        yAxisID: 'ySpeed'
-                    },
-                    {
-                        label: 'Upload Médio (Mbps)',
-                        data: monthlyUp,
-                        borderColor: '#0dcaf0',
-                        backgroundColor: '#0dcaf0',
-                        yAxisID: 'ySpeed'
-                    },
-                    {
-                        label: 'Taxa de Sucesso Ping (%)',
-                        data: monthlyPing,
-                        type: 'bar',
-                        backgroundColor: 'rgba(25, 135, 84, 0.4)',
-                        borderColor: 'rgba(25, 135, 84, 1)',
-                        borderWidth: 1,
-                        yAxisID: 'yPing'
-                    }
+                    { label: 'Conectado (%)', data: dailyConnPct, backgroundColor: '#198754' },
+                    { label: 'Instável (%)', data: dailyUnstPct, backgroundColor: '#ffc107' },
+                    { label: 'Queda (%)', data: dailyDiscPct, backgroundColor: '#dc3545' }
                 ]
             },
-            options: {
-                responsive: true,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { grid: { display: false } },
-                    ySpeed: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'Velocidade (Mbps)' }
-                    },
-                    yPing: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        min: 0,
-                        max: 100,
-                        title: { display: true, text: 'Estabilidade (%)' },
-                        grid: { drawOnChartArea: false }
-                    }
-                }
-            }
+            options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
     }
 
     // ==========================================
-    // 3. Geração do Relatório em PDF (Correção da Captura de Ecrã)
+    // 4. Geração do Relatório em PDF (Nativo e Perfeito)
     // ==========================================
     const btnPdf = document.getElementById('btn-gerar-pdf');
-    const filenameLabel = getStringData('filenameLabel');
 
     if (btnPdf) {
         btnPdf.addEventListener('click', function () {
-            const btnOriginalText = btnPdf.innerHTML;
-            btnPdf.innerHTML = '⏳ Ajustando Layout...';
-            btnPdf.disabled = true;
-
-            const elementoRelatorio = document.getElementById('relatorio-conteudo');
-            const divTabela = elementoRelatorio.querySelector('.table-responsive');
-
-            // 1. Guarda estado original
-            const originalWidth = elementoRelatorio.style.width;
-            const originalMaxWidth = elementoRelatorio.style.maxWidth;
-
-            // 2. Força exatamente 1000px na div HTML (espaço largo e seguro)
-            elementoRelatorio.style.width = '1000px';
-            elementoRelatorio.style.maxWidth = '1000px';
-
-            // 3. Remove restrições de overflow da tabela
-            if (divTabela) divTabela.classList.remove('table-responsive');
-
-            // 4. Manda o Chart.js preencher os novos 1000px
-            if (monthlyChartInstance) monthlyChartInstance.resize();
-
-            // 5. Opções de captura (Aqui está a grande jogada)
-            const opt = {
-                margin: 10, // Volta aos 10mm de margem bonita
-                filename: 'Relatorio_Internet_' + filenameLabel + '.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    // Garante que o canvas fotografa exatamente a área de 1000px, ignorando o ecrã
-                    width: 1000,
-                    windowWidth: 1000
-                },
-                // O jsPDF vai pegar nessa imagem de 1000px e esmagá-la perfeitamente para caber num A4
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            // 6. Aumentei o timeout para 500ms para dar tempo do gráfico se redesenhar 100%
-            setTimeout(function () {
-                btnPdf.innerHTML = '⏳ Gerando Documento...';
-
-                html2pdf().set(opt).from(elementoRelatorio).save().then(() => {
-                    // 7. Reverte para o estado responsivo da tela
-                    elementoRelatorio.style.width = originalWidth;
-                    elementoRelatorio.style.maxWidth = originalMaxWidth;
-
-                    if (divTabela) divTabela.classList.add('table-responsive');
-                    if (monthlyChartInstance) monthlyChartInstance.resize();
-
-                    btnPdf.innerHTML = btnOriginalText;
-                    btnPdf.disabled = false;
-                });
-            }, 500);
+            // Usa o recurso de impressão nativo com a diretiva CSS @media print
+            // configurada no details.html para gerar o PDF sem erros de limite de renderização.
+            window.print();
         });
     }
 });
