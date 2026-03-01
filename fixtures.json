@@ -16,8 +16,11 @@
             "download_speed_minimum_threshold": 400.0,
             "download_speed_expected_threshold": 600.0,
             "upload_speed_minimum_threshold": 80.0,
-            "upload_speed_expected_threshold": 120.0,
-            "id_provider_speedtest": "18526"
+            "upload_speed_expected_threshold": 100.0,
+            "id_provider_speedtest": "18526",
+            "speed_drop_limit": 3,
+            "connection_drop_limit": 3,
+            "destination_emails": "daniel.dias@gmail.com"
         }
     },
     {

@@ -86,9 +86,46 @@ class InternetProvider(models.Model):
     id_provider_speedtest = models.CharField(
         max_length=255, null=True, blank=True,
         help_text="Provider ID for speedtest.net (if applicable). https://williamyaps.github.io/wlmjavascript/servercli.html")
+    speed_drop_limit = models.IntegerField(
+        default=3,
+        verbose_name="Limite de Quedas de Velocidade",
+        help_text="Número de testes de velocidade consecutivos abaixo de 100Mbps para disparar alerta."
+    )
+    connection_drop_limit = models.IntegerField(
+        default=5,
+        verbose_name="Limite de Falhas de Conexão",
+        help_text="Número de testes de conectividade consecutivos com falha/instabilidade para disparar alerta."
+    )
+    destination_emails = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="E-mails de Destino",
+        help_text="Endereços de e-mail que receberão os alertas (separados por vírgula)."
+    )
+    speed_alert_active = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name="Alerta de Velocidade Ativo",
+        help_text="Marcado automaticamente quando o alerta é enviado. Desmarcado quando a rede normaliza."
+    )
+    connection_alert_active = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name="Alerta de Conexão Ativo",
+        help_text="Marcado automaticamente quando o alerta é enviado. Desmarcado quando a rede normaliza."
+    )
 
     def __str__(self):
         return self.name
+
+    @property
+    def destination_emails_list(self):
+        """
+        Retorna os e-mails como uma lista Python.
+        """
+        if self.destination_emails:
+            return [email.strip() for email in self.destination_emails.split(',') if email.strip()]
+        return []
 
 
 class HostsToPing(models.Model):
@@ -137,6 +174,5 @@ class ConnectionSpeed(models.Model):
     provider = models.ForeignKey(
         InternetProvider, on_delete=models.CASCADE, related_name='connection_speeds')
 
-
-def __str__(self):
-    return f"Download: {self.download_speed} Mbps, Upload: {self.upload_speed} Mbps, Latency: {self.latency} ms (Last tested: {self.last_tested})"
+    def __str__(self):
+        return f"Download: {self.download_speed} Mbps, Upload: {self.upload_speed} Mbps, Latency: {self.latency} ms (Last tested: {self.last_tested})"
