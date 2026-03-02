@@ -1,18 +1,26 @@
 import json
 import schedule
 import time
-
+import threading
 from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import import_string
-
 from internet_status.models import InternetProvider
 
 
+def run_threaded(job_func, *args, **kwargs):
+    """
+    Função auxiliar que executa a tarefa real dentro de uma nova Thread.
+    Isso impede que tarefas longas (como o Speedtest) congelem o agendador principal.
+    """
+    job_thread = threading.Thread(target=job_func, args=args, kwargs=kwargs)
+    job_thread.start()
+
+
 class Command(BaseCommand):
-    help = 'Executa o agendador híbrido com reload dinâmico via flag'
+    help = 'Executa o agendador híbrido com reload dinâmico e execução em multithreading'
 
     def load_tasks(self):
         """Limpa a agenda atual e recarrega do JSON e do Banco de Dados."""
@@ -43,22 +51,20 @@ class Command(BaseCommand):
                     value = config.get('value')
                     unit = config.get('unit')
 
+                    # Adicionamos o run_threaded antes da função real
                     if unit == 'minutes':
-                        schedule.every(value).minutes.do(task_func)
+                        schedule.every(value).minutes.do(
+                            run_threaded, task_func)
                     elif unit == 'hours':
-                        schedule.every(value).hours.do(task_func)
+                        schedule.every(value).hours.do(run_threaded, task_func)
                     self.stdout.write(
-                        f" -> [JSON] {task_path} (A cada {value} {unit})")
+                        f" -> [JSON] {task_path} (A cada {value} {unit} - em background)")
 
                 elif sched_type == 'daily':
                     run_time = config.get('time')
-                    schedule.every().day.at(run_time).do(task_func)
+                    schedule.every().day.at(run_time).do(run_threaded, task_func)
                     self.stdout.write(
-                        f" -> [JSON] {task_path} (Diariamente às {run_time})")
-        else:
-            self.stdout.write(
-                f"Arquivo de configuração JSON não encontrado: {json_path}."
-                f" Ignorando tarefas estáticas.")
+                        f" -> [JSON] {task_path} (Diariamente às {run_time} - em background)")
 
         # --- 2. CARGA DINÂMICA (BANCO DE DADOS) ---
         self.stdout.write(self.style.SUCCESS(
@@ -72,16 +78,19 @@ class Command(BaseCommand):
             providers = InternetProvider.objects.filter(enabled=True)
             for provider in providers:
                 if provider.status_check_interval > 0:
+                    # Passamos a função run_threaded, depois a função real, e por fim os argumentos (provider_id)
                     schedule.every(provider.status_check_interval).minutes.do(
-                        ping_task, provider_id=provider.id)
+                        run_threaded, ping_task, provider_id=provider.id
+                    )
                     self.stdout.write(
-                        f" -> [BD] Ping p/ '{provider.name}' (A cada {provider.status_check_interval} min)")
+                        f" -> [BD] Ping p/ '{provider.name}' (A cada {provider.status_check_interval} min - em background)")
 
                 if provider.speed_test_interval > 0:
                     schedule.every(provider.speed_test_interval).minutes.do(
-                        speed_task, provider_id=provider.id)
+                        run_threaded, speed_task, provider_id=provider.id
+                    )
                     self.stdout.write(
-                        f" -> [BD] Speedtest p/ '{provider.name}' (A cada {provider.speed_test_interval} min)")
+                        f" -> [BD] Speedtest p/ '{provider.name}' (A cada {provider.speed_test_interval} min - em background)")
         except Exception as ex:
             self.stdout.write(self.style.ERROR(
                 f"Erro ao carregar do banco de dados: {ex}"))
@@ -98,9 +107,8 @@ class Command(BaseCommand):
             reload_flag.unlink()
 
         self.stdout.write(self.style.SUCCESS(
-            "Iniciando Agendador Híbrido com Reload Dinâmico..."))
+            "Iniciando Agendador Híbrido Multithread com Reload Dinâmico..."))
 
-        # Faz a primeira carga
         self.load_tasks()
 
         self.stdout.write(self.style.SUCCESS(
@@ -108,15 +116,14 @@ class Command(BaseCommand):
 
         try:
             while True:
-                # Verifica se houve alteração no painel Admin (flag criada)
                 if reload_flag.exists():
                     self.stdout.write(self.style.WARNING(
                         "\nDetectada alteração nas configurações! Recarregando..."))
-                    reload_flag.unlink()  # Deleta a flag para não ficar em loop infinito
+                    reload_flag.unlink()
                     self.load_tasks()
 
                 schedule.run_pending()
                 heartbeat_file.touch(exist_ok=True)
-                time.sleep(2)  # Pausa curta para não onerar o processador
+                time.sleep(2)
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nAgendador encerrado."))
