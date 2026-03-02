@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'django_tasks_db',
     'core',
     'internet_status',
 ]
@@ -112,13 +111,6 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
-}
-
-# Configuração do novo sistema de tasks
-TASKS = {
-    "default": {
-        "BACKEND": "django_tasks_db.DatabaseBackend",
-    }
 }
 
 # Internationalization

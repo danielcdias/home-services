@@ -212,3 +212,15 @@ class InternetCheck(metaclass=SingletonMeta):
             result_data['exception'] = str(ex)
 
         return result_data
+
+    def check_single_status(self, provider: InternetProvider):
+        status, ping_results = self._ping(provider)
+        if not self._save_ping_results(provider, ping_results, status):
+            logger.error(
+                f"Erro salvando resultado do ping para provider {provider.name}.")
+
+    def check_single_speed(self, provider: InternetProvider):
+        speed_results = self._speedtest(provider)
+        if not self._save_speed_results(provider, speed_results):
+            logger.error(
+                f"Erro salvando resultado do speedtest para provider {provider.name}.")

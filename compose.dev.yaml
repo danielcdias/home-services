@@ -47,32 +47,6 @@ services:
       timeout: 30s
       retries: 10
 
-  django-worker:
-    container_name: django-worker
-    hostname: django-worker
-    build:
-      context: .
-      dockerfile: Containerfile
-    image: home-services-appserver:latest
-    command: python manage.py db_worker
-    env_file:
-      - .env
-    networks:
-      - public_net
-      - internal_net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      django:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "grep -qa 'db_worker' /proc/[1-9]*/cmdline 2>/dev/null || exit 1"]
-      start_period: 5s
-      start_interval: 5s
-      interval: 30s
-      timeout: 10s
-      retries: 10
-
   django-scheduler:
     container_name: django-scheduler
     hostname: django-scheduler
@@ -90,8 +64,6 @@ services:
       postgres:
         condition: service_healthy
       django:
-        condition: service_healthy
-      django-worker:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "find /tmp/scheduler_heartbeat.lock -mmin -1 | grep -q . || exit 1"]
