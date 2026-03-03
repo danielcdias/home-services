@@ -1,0 +1,133 @@
+/* ========================================================= */
+/* ESTRUTURA E TABELAS                                       */
+/* ========================================================= */
+.scrollable-table {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* ========================================================= */
+/* TOOLTIP GLOBAL (Injetado via JS no Body)                  */
+/* ========================================================= */
+
+/* Gatilho na linha inteira da tabela */
+.dcd-tooltip-row {
+    cursor: help;
+    transition: background-color 0.15s ease;
+}
+
+.dcd-tooltip-row:hover {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* O Balão flutuante */
+.dcd-global-tooltip {
+    position: absolute;
+    z-index: 999999;
+    visibility: hidden;
+    opacity: 0;
+    width: max-content;
+    max-width: 380px;
+    background-color: #303030;
+    color: #f7fafc;
+    text-align: left;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    pointer-events: none;
+    /* Impede que o balão roube o foco do rato */
+    transition: opacity 0.15s ease-in-out;
+}
+
+.dcd-global-tooltip.visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Setinha apontando para baixo */
+.dcd-global-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -6px;
+    border-width: 6px;
+    border-style: solid;
+    border-color: #303030 transparent transparent transparent;
+}
+
+/* Setinha invertida (quando o balão é renderizado abaixo da linha) */
+.dcd-global-tooltip.tooltip-bottom::after {
+    top: auto;
+    bottom: 100%;
+    border-color: transparent transparent #303030 transparent;
+}
+
+/* ========================================================= */
+/* MÁGICA DE IMPRESSÃO - Ajustes Profissionais de Layout A4  */
+/* ========================================================= */
+@media print {
+    .d-print-none {
+        display: none !important;
+    }
+
+    .col-md-6,
+    .col-12 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0 !important;
+    }
+
+    canvas {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 2rem !important;
+        page-break-inside: avoid !important;
+    }
+
+    .scrollable-table {
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    table {
+        page-break-inside: auto;
+        width: 100% !important;
+    }
+
+    tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    .bg-light {
+        background-color: transparent !important;
+        padding: 0 !important;
+    }
+
+    body {
+        background-color: #fff !important;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 1cm;
+    }
+}

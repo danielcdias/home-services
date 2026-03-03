@@ -1,67 +1,79 @@
-document.addEventListener("DOMContentLoaded", function () {
-    function getDjangoData(elementId) {
-        const element = document.getElementById(elementId);
-        return element ? JSON.parse(element.textContent) : [];
-    }
-
-    function getStringData(elementId) {
-        const element = document.getElementById(elementId);
-        return element ? JSON.parse(element.textContent) : 'atual';
-    }
-
-    const dailyLabels = getDjangoData('dailyLabels');
-
-    const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
-    const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
-
-    let speedChartInstance = null;
-    let speedAchievedChartInstance = null;
-    let pingChartInstance = null;
+document.addEventListener('DOMContentLoaded', function () {
 
     // ==========================================
-    // 1. Gráfico de Velocidade Absoluta
+    // 1. LÓGICA DOS GRÁFICOS (CHART.JS)
     // ==========================================
-    const ctxSpeed = document.getElementById('speedChart');
-    if (ctxSpeed) {
-        const dailyDown = getDjangoData('dailyDown');
-        const dailyUp = getDjangoData('dailyUp');
-        const lineContratadoDown = Array(dailyLabels.length).fill(CONTRACTED_DOWN);
-        const lineContratadoUp = Array(dailyLabels.length).fill(CONTRACTED_UP);
+    function getDjangoData(id) {
+        const el = document.getElementById(id);
+        return el ? JSON.parse(el.textContent) : [];
+    }
 
-        speedChartInstance = new Chart(ctxSpeed, {
+    const labels = getDjangoData('dailyLabels');
+
+    // Gráfico 1: Desempenho Médio Diário
+    const speedChartEl = document.getElementById('speedChart');
+    if (speedChartEl) {
+        const down = getDjangoData('dailyDown');
+        const up = getDjangoData('dailyUp');
+        const contractedDown = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
+        const contractedUp = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
+
+        const lineContratadoDown = Array(labels.length).fill(contractedDown);
+        const lineContratadoUp = Array(labels.length).fill(contractedUp);
+
+        new Chart(speedChartEl, {
             type: 'line',
             data: {
-                labels: dailyLabels,
+                labels: labels,
                 datasets: [
-                    { label: 'Download Medido', data: dailyDown, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', fill: true, tension: 0.3 },
-                    { label: 'Download Contratado', data: lineContratadoDown, borderColor: '#0d6efd', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 },
-                    { label: 'Upload Medido', data: dailyUp, borderColor: '#0dcaf0', backgroundColor: 'transparent', tension: 0.3 },
-                    { label: 'Upload Contratado', data: lineContratadoUp, borderColor: '#0dcaf0', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 }
+                    { label: 'Download (Mbps)', data: down, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', fill: true, tension: 0.3 },
+                    { label: 'Upload (Mbps)', data: up, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', fill: true, tension: 0.3 },
+                    { label: 'Download Contratado', data: lineContratadoDown, type: 'line', borderColor: '#0d6efd', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 },
+                    { label: 'Upload Contratado', data: lineContratadoUp, type: 'line', borderColor: '#0dcaf0', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 }
                 ]
             },
             options: { responsive: true, interaction: { mode: 'index', intersect: false } }
         });
     }
 
-    // ==========================================
-    // 2. Gráfico de Cumprimento da Velocidade
-    // ==========================================
-    const ctxSpeedAchieved = document.getElementById('speedAchievedChart');
-    if (ctxSpeedAchieved) {
-        const dailyDownAchieved = getDjangoData('dailyDownAchievedPct');
-        const dailyDownNotAchieved = getDjangoData('dailyDownNotAchievedPct');
-        const dailyUpAchieved = getDjangoData('dailyUpAchievedPct');
-        const dailyUpNotAchieved = getDjangoData('dailyUpNotAchievedPct');
+    // Gráfico 2: Cumprimento da Velocidade
+    const speedAchievedChartEl = document.getElementById('speedAchievedChart');
+    if (speedAchievedChartEl) {
+        const downAchieved = getDjangoData('dailyDownAchievedPct');
+        const downNotAchieved = getDjangoData('dailyDownNotAchievedPct');
+        const upAchieved = getDjangoData('dailyUpAchievedPct');
+        const upNotAchieved = getDjangoData('dailyUpNotAchievedPct');
 
-        speedAchievedChartInstance = new Chart(ctxSpeedAchieved, {
+        new Chart(speedAchievedChartEl, {
             type: 'bar',
             data: {
-                labels: dailyLabels,
+                labels: labels,
                 datasets: [
-                    { label: 'Download Atingido (%)', data: dailyDownAchieved, backgroundColor: '#0d6efd', stack: 'Stack 0' },
-                    { label: 'Download Abaixo (%)', data: dailyDownNotAchieved, backgroundColor: '#dc3545', stack: 'Stack 0' },
-                    { label: 'Upload Atingido (%)', data: dailyUpAchieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
-                    { label: 'Upload Abaixo (%)', data: dailyUpNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 1' }
+                    { label: 'Download Atingido (%)', data: downAchieved, backgroundColor: '#0d6efd', stack: 'Stack 0' },
+                    { label: 'Download Abaixo (%)', data: downNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 0' },
+                    { label: 'Upload Atingido (%)', data: upAchieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
+                    { label: 'Upload Abaixo (%)', data: upNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 1' }
+                ]
+            },
+            options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+        });
+    }
+
+    // Gráfico 3: Estabilidade Diária (Ping)
+    const pingChartEl = document.getElementById('pingChart');
+    if (pingChartEl) {
+        const conn = getDjangoData('dailyConnPct');
+        const unst = getDjangoData('dailyUnstPct');
+        const disc = getDjangoData('dailyDiscPct');
+
+        new Chart(pingChartEl, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Conectado (%)', data: conn, backgroundColor: '#198754' },
+                    { label: 'Instável (%)', data: unst, backgroundColor: '#ffc107' },
+                    { label: 'Queda (%)', data: disc, backgroundColor: '#dc3545' }
                 ]
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
@@ -69,38 +81,59 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ==========================================
-    // 3. Gráfico de Estabilidade
+    // 2. LÓGICA DO AUTO-SUBMIT (SELECT DE MÊS)
     // ==========================================
-    const ctxPing = document.getElementById('pingChart');
-    if (ctxPing) {
-        const dailyConnPct = getDjangoData('dailyConnPct');
-        const dailyUnstPct = getDjangoData('dailyUnstPct');
-        const dailyDiscPct = getDjangoData('dailyDiscPct');
-
-        pingChartInstance = new Chart(ctxPing, {
-            type: 'bar',
-            data: {
-                labels: dailyLabels,
-                datasets: [
-                    { label: 'Conectado (%)', data: dailyConnPct, backgroundColor: '#198754' },
-                    { label: 'Instável (%)', data: dailyUnstPct, backgroundColor: '#ffc107' },
-                    { label: 'Queda (%)', data: dailyDiscPct, backgroundColor: '#dc3545' }
-                ]
-            },
-            options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+    const autoSubmitSelects = document.querySelectorAll('.auto-submit');
+    autoSubmitSelects.forEach(select => {
+        select.addEventListener('change', function () {
+            this.form.submit();
         });
-    }
+    });
 
     // ==========================================
-    // 4. Geração do Relatório em PDF (Nativo e Perfeito)
+    // 3. LÓGICA DO TOOLTIP GLOBAL E DINÂMICO
     // ==========================================
-    const btnPdf = document.getElementById('btn-gerar-pdf');
+    const tooltipBox = document.createElement('div');
+    tooltipBox.className = 'dcd-global-tooltip';
+    document.body.appendChild(tooltipBox);
 
-    if (btnPdf) {
-        btnPdf.addEventListener('click', function () {
-            // Usa o recurso de impressão nativo com a diretiva CSS @media print
-            // configurada no details.html para gerar o PDF sem erros de limite de renderização.
-            window.print();
+    const rows = document.querySelectorAll('.dcd-tooltip-row');
+
+    rows.forEach(row => {
+        row.addEventListener('mouseenter', function () {
+            const contentElement = this.querySelector('.tooltip-content-html');
+            if (!contentElement) return;
+
+            // Injeta o conteúdo oculto da linha no balão global
+            tooltipBox.innerHTML = contentElement.innerHTML;
+            tooltipBox.classList.add('visible');
+
+            // Calcula a posição geométrica da linha (<tr>)
+            const rect = this.getBoundingClientRect();
+
+            // Centraliza horizontalmente e coloca um pouco acima da linha
+            let top = rect.top + window.scrollY - tooltipBox.offsetHeight - 10;
+            const left = rect.left + window.scrollX + (rect.width / 2) - (tooltipBox.offsetWidth / 2);
+
+            // Prevenção de corte na borda superior da janela
+            if (top < window.scrollY) {
+                top = rect.bottom + window.scrollY + 10;
+                tooltipBox.classList.add('tooltip-bottom');
+            } else {
+                tooltipBox.classList.remove('tooltip-bottom');
+            }
+
+            tooltipBox.style.top = `${top}px`;
+            tooltipBox.style.left = `${left}px`;
         });
-    }
+
+        row.addEventListener('mouseleave', function () {
+            tooltipBox.classList.remove('visible');
+            setTimeout(() => {
+                if (!tooltipBox.classList.contains('visible')) {
+                    tooltipBox.innerHTML = '';
+                }
+            }, 150);
+        });
+    });
 });

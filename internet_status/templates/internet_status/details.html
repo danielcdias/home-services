@@ -6,86 +6,7 @@
 {% endblock %}
 
 {% block content %}
-  <style>
-    /* Estilo para segurar o tamanho na tela */
-    .scrollable-table {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-    
-    /* ========================================================= */
-    /* MÁGICA DE IMPRESSÃO - Ajustes Profissionais de Layout A4  */
-    /* ========================================================= */
-    @media print {
-      /* Esconde elementos de navegação */
-      .d-print-none {
-        display: none !important;
-      }
-    
-      /* 1. Resolve as tabelas espremidas: Força colunas a 100% da largura da página */
-      .col-md-6,
-      .col-12 {
-        flex: 0 0 100% !important;
-        max-width: 100% !important;
-        width: 100% !important;
-        padding: 0 !important;
-      }
-    
-      /* 2. Resolve gráficos cortados: Impede que o canvas vaze as margens */
-      canvas {
-        max-width: 100% !important;
-        height: auto !important;
-      }
-    
-      /* 3. Previne cortes de gráficos ou títulos ao meio na troca de página */
-      .card {
-        border: none !important;
-        box-shadow: none !important;
-        margin-bottom: 2rem !important;
-        page-break-inside: avoid !important; /* Nunca quebra o card no meio */
-      }
-    
-      /* Liberta as tabelas para mostrarem todos os dados */
-      .scrollable-table {
-        max-height: none !important;
-        overflow-y: visible !important;
-      }
-    
-      /* Garante as cores de fundo nas badges e barras de título */
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-    
-      /* Comportamento de tabela para não cortar as linhas a meio */
-      table {
-        page-break-inside: auto;
-        width: 100% !important;
-      }
-      tr {
-        page-break-inside: avoid;
-        page-break-after: auto;
-      }
-      thead {
-        display: table-header-group;
-      } /* Repete o cabeçalho se a tabela mudar de página */
-    
-      /* Limpa fundos do site para poupar tinta e espaço */
-      .bg-light {
-        background-color: transparent !important;
-        padding: 0 !important;
-      }
-      body {
-        background-color: #fff !important;
-      }
-    
-      /* Margens perfeitas para folha A4 vertical */
-      @page {
-        size: A4 portrait;
-        margin: 1cm;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'internet_status/css/details.css' %}" />
 
   <div class="row mb-4 align-items-center border-bottom pb-3 d-print-none">
     <div class="col-md-6 d-flex align-items-center">
@@ -101,7 +22,7 @@
 
       <form method="GET" class="d-flex align-items-center gap-2 m-0">
         <span class="fw-bold">Período:</span>
-        <select name="month" class="form-select" onchange="this.form.submit()">
+        <select name="month" class="form-select auto-submit">
           {% for m in available_months %}
             {% if m.month == selected_month and m.year == selected_year %}
               <option value="{{ m.month }}" selected>{{ m.label }}</option>
@@ -231,11 +152,37 @@
                 </thead>
                 <tbody>
                   {% for speed in monthly_speeds %}
-                    <tr>
-                      <td class="small">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
-                      <td class="{% if speed.download_speed < provider.contracted_download_speed %}text-danger fw-bold{% endif %}">{{ speed.download_speed }} Mbps</td>
-                      <td class="{% if speed.upload_speed < provider.contracted_upload_speed %}text-danger fw-bold{% endif %}">{{ speed.upload_speed }} Mbps</td>
-                      <td>{{ speed.latency }} ms</td>
+                    <tr class="dcd-tooltip-row">
+                      <td class="small align-middle">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
+                      <td class="align-middle {% if speed.download_speed < provider.contracted_download_speed %}text-danger fw-bold{% endif %}">{{ speed.download_speed }} Mbps</td>
+                      <td class="align-middle {% if speed.upload_speed < provider.contracted_upload_speed %}text-danger fw-bold{% endif %}">{{ speed.upload_speed }} Mbps</td>
+                      <td class="align-middle">{{ speed.latency }} ms</td>
+
+                      <td class="d-none">
+                        <div class="tooltip-content-html">
+                          {% with result=speed.full_results.test_result %}
+                            <div class="mb-1">
+                              - <strong>Provedor:</strong> {{ result.client.isp }} - {{ result.client.country }}
+                            </div>
+                            <div class="mb-1">
+                              - <strong>IP:</strong> {{ result.client.ip }}
+                            </div>
+                            <div class="mb-1">
+                              - <strong>Servidor:</strong> {{ result.server.sponsor }}
+                            </div>
+                            <div class="mb-1">
+                              - <strong>Cidade:</strong> {{ result.server.name }} - {{ result.server.country }}
+                            </div>
+                            <div class="mb-1">
+                              - <strong>Distância:</strong> {% if speed.server_distance_km %}
+                                {{ speed.server_distance_km }} km
+                              {% else %}
+                                N/D
+                              {% endif %}
+                            </div>
+                          {% endwith %}
+                        </div>
+                      </td>
                     </tr>
                   {% empty %}
                     <tr>
@@ -266,9 +213,9 @@
                 </thead>
                 <tbody>
                   {% for ping in monthly_pings_list %}
-                    <tr>
-                      <td class="small">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
-                      <td>
+                    <tr class="dcd-tooltip-row">
+                      <td class="small align-middle">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
+                      <td class="align-middle">
                         {% if ping.status == 'connected' %}
                           <span class="text-success fw-bold">Conectado</span>
                         {% elif ping.status == 'unstable' %}
@@ -279,7 +226,25 @@
                           <span class="text-secondary fw-bold">Desconhecido</span>
                         {% endif %}
                       </td>
-                      <td class="fw-bold text-muted">{{ ping.successful_pings }}/{{ ping.total_hosts }} ({{ ping.success_rate_pct|floatformat:0 }}%)</td>
+                      <td class="fw-bold text-muted align-middle">{{ ping.successful_pings }}/{{ ping.total_hosts }} ({{ ping.success_rate_pct|floatformat:0 }}%)</td>
+
+                      <td class="d-none">
+                        <div class="tooltip-content-html">
+                          {% if ping.ping_results.tests_results %}
+                            {% for host in ping.ping_results.tests_results %}
+                              <div class="mb-1">
+                                -{% if host.success %}
+                                  <span class="text-success fw-bold">{{ host.name }} ({{ host.hostname_or_ipaddress }}): {{ host.result|floatformat:3 }} ms</span>
+                                {% else %}
+                                  <span class="text-danger fw-bold">{{ host.name }} ({{ host.hostname_or_ipaddress }}): Falhou</span>
+                                {% endif %}
+                              </div>
+                            {% endfor %}
+                          {% else %}
+                            <div>Sem dados detalhados.</div>
+                          {% endif %}
+                        </div>
+                      </td>
                     </tr>
                   {% empty %}
                     <tr>
