@@ -3,7 +3,6 @@ name: home-services
 services:
 
   django:
-    container_name: django
     hostname: hs_django
     build:
       context: .
@@ -12,6 +11,8 @@ services:
     command: ./django-entrypoint.sh
     env_file:
       - .env
+    volumes:
+      - hs_shared_data:/app/shared
     networks:
       - reverse_proxy_net
       - db_net
@@ -25,7 +26,6 @@ services:
       retries: 10
 
   django-scheduler:
-    container_name: django-scheduler
     hostname: hs_scheduler
     build:
       context: .
@@ -34,6 +34,8 @@ services:
     command: python manage.py scheduler
     env_file:
       - .env
+    volumes:
+      - hs_shared_data:/app/shared
     networks:
       - db_net
     depends_on:
@@ -55,3 +57,6 @@ networks:
   db_net:
     external: true
     name: home-server_internal_db
+
+volumes:
+  hs_shared_data:

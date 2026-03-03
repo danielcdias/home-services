@@ -98,7 +98,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         heartbeat_file = Path(settings.BASE_DIR) / 'scheduler_heartbeat.lock' if getattr(
             settings, 'LOCAL_DEV_ENV', False) else Path('/tmp/scheduler_heartbeat.lock')
-        reload_flag = Path(settings.BASE_DIR) / 'reload_scheduler.flag'
+        shared_dir = Path(settings.BASE_DIR) / 'shared'
+        shared_dir.mkdir(exist_ok=True)
+        reload_flag = shared_dir / 'reload_scheduler.flag'
 
         # Limpa os arquivos residuais na inicialização
         if heartbeat_file.exists():
