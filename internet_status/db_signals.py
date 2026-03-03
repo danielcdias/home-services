@@ -31,7 +31,10 @@ def trigger_connection_alert_check(sender, instance, created, **kwargs):
 
 def _create_reload_flag():
     """Função auxiliar para criar o arquivo de flag."""
-    flag_file = Path(settings.BASE_DIR) / 'reload_scheduler.flag'
+    shared_dir = Path(settings.BASE_DIR) / 'shared'
+    shared_dir.mkdir(exist_ok=True) # Garante que a pasta existe
+    
+    flag_file = shared_dir / 'reload_scheduler.flag'
     flag_file.touch(exist_ok=True)
 
 
