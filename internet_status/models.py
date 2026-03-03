@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
+from geopy.distance import geodesic
 
 
 class InternetProvider(models.Model):
@@ -176,3 +177,23 @@ class ConnectionSpeed(models.Model):
 
     def __str__(self):
         return f"Download: {self.download_speed} Mbps, Upload: {self.upload_speed} Mbps, Latency: {self.latency} ms (Last tested: {self.last_tested})"
+
+    @property
+    def server_distance_km(self):
+        """Calcula a distância em km entre o cliente e o servidor de teste em tempo real."""
+        try:
+            client_data = self.full_results.get('test_result', {}).get('client', {})
+            server_data = self.full_results.get('test_result', {}).get('server', {})
+            
+            client_lat = client_data.get('lat')
+            client_lon = client_data.get('lon')
+            server_lat = server_data.get('lat')
+            server_lon = server_data.get('lon')
+            
+            if client_lat and client_lon and server_lat and server_lon:
+                p1 = (float(client_lat), float(client_lon))
+                p2 = (float(server_lat), float(server_lon))
+                return round(geodesic(p1, p2).kilometers, 2)
+        except (KeyError, TypeError, ValueError):
+            return None
+        return None
