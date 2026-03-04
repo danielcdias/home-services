@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     volumes:
-      - hs_shared_data:/app/shared
+      - hs_shared_data:/home/app/web/shared
     networks:
       - reverse_proxy_net
       - db_net
@@ -35,7 +35,7 @@ services:
     env_file:
       - .env
     volumes:
-      - hs_shared_data:/app/shared
+      - hs_shared_data:/home/app/web/shared
     networks:
       - db_net
     depends_on:
