@@ -185,3 +185,7 @@ cython_debug/
 
 # Scheduler lock file
 scheduler_heartbeat.lock
+
+# Fixtures files
+fixtures.json
+
