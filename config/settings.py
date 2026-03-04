@@ -150,7 +150,7 @@ LOGGING = {
     },
     'handlers': {
         'console_stdout': {
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'django-format',
             'stream': 'ext://sys.stdout',
