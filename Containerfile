@@ -28,6 +28,6 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     DJANGO_DATABASE_URL="sqlite:///dummy.db" python manage.py collectstatic --no-input && \
     chmod +x ./django-entrypoint.sh
 
-RUN mkdir -p /app/shared && chown -R app:app /app/shared
+RUN mkdir -p $APP_HOME/shared && chown -R app:app $APP_HOME/shared
 
 USER app

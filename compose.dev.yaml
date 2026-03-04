@@ -32,7 +32,7 @@ services:
     env_file:
       - .env
     volumes:
-      - hs_shared_data:/app/shared
+      - hs_shared_data:/home/app/web/shared
     networks:
       - public_net
       - internal_net
@@ -57,7 +57,7 @@ services:
     env_file:
       - .env
     volumes:
-      - hs_shared_data:/app/shared
+      - hs_shared_data:/home/app/web/shared
     networks:
       - public_net
       - internal_net
