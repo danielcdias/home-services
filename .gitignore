@@ -183,9 +183,10 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Scheduler lock file
-scheduler_heartbeat.lock
-
 # Fixtures files
 fixtures.json
 
+# Scheduler lock and flag files
+scheduler_heartbeat.lock
+shared/reload_scheduler.flag
+reload_scheduler.flag
