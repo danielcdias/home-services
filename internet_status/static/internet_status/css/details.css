@@ -6,11 +6,19 @@
     overflow-y: auto;
 }
 
+/* Cabeçalhos fixos nas tabelas adaptáveis ao Dark/Light Mode */
+.adaptive-sticky-header th {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    z-index: 2;
+    /* Garante que o texto da tabela role por baixo */
+}
+
 /* ========================================================= */
 /* TOOLTIP GLOBAL (Injetado via JS no Body)                  */
 /* ========================================================= */
 
-/* Gatilho na linha inteira da tabela */
 .dcd-tooltip-row {
     cursor: help;
     transition: background-color 0.15s ease;
@@ -20,7 +28,6 @@
     background-color: rgba(0, 0, 0, 0.05) !important;
 }
 
-/* O Balão flutuante */
 .dcd-global-tooltip {
     position: absolute;
     z-index: 999999;
@@ -37,7 +44,6 @@
     font-size: 0.85rem;
     line-height: 1.5;
     pointer-events: none;
-    /* Impede que o balão roube o foco do rato */
     transition: opacity 0.15s ease-in-out;
 }
 
@@ -46,7 +52,6 @@
     opacity: 1;
 }
 
-/* Setinha apontando para baixo */
 .dcd-global-tooltip::after {
     content: "";
     position: absolute;
@@ -58,7 +63,6 @@
     border-color: #303030 transparent transparent transparent;
 }
 
-/* Setinha invertida (quando o balão é renderizado abaixo da linha) */
 .dcd-global-tooltip.tooltip-bottom::after {
     top: auto;
     bottom: 100%;
@@ -117,7 +121,8 @@
         display: table-header-group;
     }
 
-    .bg-light {
+    .bg-light,
+    .bg-body-tertiary {
         background-color: transparent !important;
         padding: 0 !important;
     }

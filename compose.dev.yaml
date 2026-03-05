@@ -1,7 +1,8 @@
-name: home-services
+name: ${PROJECT_NAME}
 
 services:
   postgres:
+    container_name: ${PROJECT_NAME}-postgres
     hostname: postgres
     image: "postgres:18-trixie"
     volumes:
@@ -23,6 +24,7 @@ services:
       retries: 5
 
   django:
+    container_name: ${PROJECT_NAME}-django
     hostname: django
     build:
       context: .
@@ -48,6 +50,7 @@ services:
       retries: 10
 
   django-scheduler:
+    container_name: ${PROJECT_NAME}-django-scheduler
     hostname: django-scheduler
     build:
       context: .
@@ -75,6 +78,7 @@ services:
       retries: 10
 
   nginx:
+    container_name: ${PROJECT_NAME}-nginx
     hostname: nginx
     image: "nginx:1.29-bookworm"
     ports:

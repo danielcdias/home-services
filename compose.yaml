@@ -1,8 +1,9 @@
-name: home-services
+name: ${PROJECT_NAME}
 
 services:
 
   django:
+    container_name: ${PROJECT_NAME}-django
     hostname: hs_django
     build:
       context: .
@@ -26,6 +27,7 @@ services:
       retries: 10
 
   django-scheduler:
+    container_name: ${PROJECT_NAME}-django-scheduler
     hostname: hs_scheduler
     build:
       context: .

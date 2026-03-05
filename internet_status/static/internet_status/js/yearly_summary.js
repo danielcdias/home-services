@@ -5,18 +5,36 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const labels = getDjangoData('monthLabels');
-    const down = getDjangoData('monthlyDown');
-    const up = getDjangoData('monthlyUp');
+    const activeCharts = [];
 
-    const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
-    const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
-    const lineContratadoDown = Array(labels.length).fill(CONTRACTED_DOWN);
-    const lineContratadoUp = Array(labels.length).fill(CONTRACTED_UP);
+    // --- CONFIGURAÇÃO GLOBAL INICIAL DE CORES DO CHART.JS ---
+    const updateChartColors = () => {
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
 
-    // 1. Velocidade Média
+        // Uso estrito de hexadecimais para garantir alto contraste nos labels
+        const textColor = isDark ? '#e9ecef' : '#212529';
+        const gridColor = isDark ? '#495057' : '#dee2e6';
+
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+
+        if (Chart.defaults.scale) {
+            Chart.defaults.scale.ticks.color = textColor;
+            Chart.defaults.scale.grid.color = gridColor;
+        }
+    };
+    updateChartColors();
+
     const speedChartEl = document.getElementById('yearlySpeedChart');
     if (speedChartEl) {
-        new Chart(speedChartEl, {
+        const down = getDjangoData('monthlyDown');
+        const up = getDjangoData('monthlyUp');
+        const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
+        const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
+        const lineContratadoDown = Array(labels.length).fill(CONTRACTED_DOWN);
+        const lineContratadoUp = Array(labels.length).fill(CONTRACTED_UP);
+
+        const speedChart = new Chart(speedChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -29,17 +47,17 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, interaction: { mode: 'index', intersect: false } }
         });
+        activeCharts.push(speedChart);
     }
-
-    // 2. Cumprimento de Velocidade
-    const downAchieved = getDjangoData('monthlyDownAchievedPct');
-    const downNotAchieved = getDjangoData('monthlyDownNotAchievedPct');
-    const upAchieved = getDjangoData('monthlyUpAchievedPct');
-    const upNotAchieved = getDjangoData('monthlyUpNotAchievedPct');
 
     const achievedChartEl = document.getElementById('yearlySpeedAchievedChart');
     if (achievedChartEl) {
-        new Chart(achievedChartEl, {
+        const downAchieved = getDjangoData('monthlyDownAchievedPct');
+        const downNotAchieved = getDjangoData('monthlyDownNotAchievedPct');
+        const upAchieved = getDjangoData('monthlyUpAchievedPct');
+        const upNotAchieved = getDjangoData('monthlyUpNotAchievedPct');
+
+        const achievedChart = new Chart(achievedChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -52,16 +70,16 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
+        activeCharts.push(achievedChart);
     }
-
-    // 3. Estabilidade
-    const conn = getDjangoData('monthlyConnPct');
-    const unst = getDjangoData('monthlyUnstPct');
-    const disc = getDjangoData('monthlyDiscPct');
 
     const pingChartEl = document.getElementById('yearlyPingChart');
     if (pingChartEl) {
-        new Chart(pingChartEl, {
+        const conn = getDjangoData('monthlyConnPct');
+        const unst = getDjangoData('monthlyUnstPct');
+        const disc = getDjangoData('monthlyDiscPct');
+
+        const pingChart = new Chart(pingChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -73,9 +91,24 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
+        activeCharts.push(pingChart);
     }
 
-    // Escuta mudanças no select de ano
+    // --- REAGE À MUDANÇA DE TEMA ---
+    window.addEventListener('themeChanged', () => {
+        updateChartColors();
+        activeCharts.forEach(chart => {
+            // Força a atualização profunda nas opções de eixos (X e Y) de cada gráfico
+            if (chart.options.scales) {
+                Object.values(chart.options.scales).forEach(scale => {
+                    if (scale.ticks) scale.ticks.color = Chart.defaults.color;
+                    if (scale.grid) scale.grid.color = Chart.defaults.borderColor;
+                });
+            }
+            chart.update();
+        });
+    });
+
     const autoSubmitSelects = document.querySelectorAll('.auto-submit');
     autoSubmitSelects.forEach(select => {
         select.addEventListener('change', function () {
