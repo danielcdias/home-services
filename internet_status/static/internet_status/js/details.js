@@ -1,16 +1,31 @@
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ==========================================
-    // 1. LÓGICA DOS GRÁFICOS (CHART.JS)
-    // ==========================================
     function getDjangoData(id) {
         const el = document.getElementById(id);
         return el ? JSON.parse(el.textContent) : [];
     }
 
     const labels = getDjangoData('dailyLabels');
+    const activeCharts = [];
 
-    // Gráfico 1: Desempenho Médio Diário
+    // --- CONFIGURAÇÃO GLOBAL INICIAL DE CORES DO CHART.JS ---
+    const updateChartColors = () => {
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+
+        // Uso estrito de hexadecimais para garantir alto contraste nos labels
+        const textColor = isDark ? '#e9ecef' : '#212529'; // Branco gelo vs Cinza quase preto
+        const gridColor = isDark ? '#495057' : '#dee2e6'; // Cinza médio escuro vs Cinza claro
+
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+
+        if (Chart.defaults.scale) {
+            Chart.defaults.scale.ticks.color = textColor;
+            Chart.defaults.scale.grid.color = gridColor;
+        }
+    };
+    updateChartColors();
+
     const speedChartEl = document.getElementById('speedChart');
     if (speedChartEl) {
         const down = getDjangoData('dailyDown');
@@ -21,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const lineContratadoDown = Array(labels.length).fill(contractedDown);
         const lineContratadoUp = Array(labels.length).fill(contractedUp);
 
-        new Chart(speedChartEl, {
+        const speedChart = new Chart(speedChartEl, {
             type: 'line',
             data: {
                 labels: labels,
@@ -34,9 +49,9 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, interaction: { mode: 'index', intersect: false } }
         });
+        activeCharts.push(speedChart);
     }
 
-    // Gráfico 2: Cumprimento da Velocidade
     const speedAchievedChartEl = document.getElementById('speedAchievedChart');
     if (speedAchievedChartEl) {
         const downAchieved = getDjangoData('dailyDownAchievedPct');
@@ -44,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const upAchieved = getDjangoData('dailyUpAchievedPct');
         const upNotAchieved = getDjangoData('dailyUpNotAchievedPct');
 
-        new Chart(speedAchievedChartEl, {
+        const speedAchievedChart = new Chart(speedAchievedChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -57,16 +72,16 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
+        activeCharts.push(speedAchievedChart);
     }
 
-    // Gráfico 3: Estabilidade Diária (Ping)
     const pingChartEl = document.getElementById('pingChart');
     if (pingChartEl) {
         const conn = getDjangoData('dailyConnPct');
         const unst = getDjangoData('dailyUnstPct');
         const disc = getDjangoData('dailyDiscPct');
 
-        new Chart(pingChartEl, {
+        const pingChart = new Chart(pingChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -78,44 +93,43 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
+        activeCharts.push(pingChart);
     }
 
-    // ==========================================
-    // 2. LÓGICA DO AUTO-SUBMIT (SELECT DE MÊS)
-    // ==========================================
-    const autoSubmitSelects = document.querySelectorAll('.auto-submit');
-    autoSubmitSelects.forEach(select => {
-        select.addEventListener('change', function () {
-            this.form.submit();
+    // --- REAGE À MUDANÇA DE TEMA ---
+    window.addEventListener('themeChanged', () => {
+        updateChartColors();
+        activeCharts.forEach(chart => {
+            // Força a atualização profunda nas opções de eixos (X e Y) de cada gráfico
+            if (chart.options.scales) {
+                Object.values(chart.options.scales).forEach(scale => {
+                    if (scale.ticks) scale.ticks.color = Chart.defaults.color;
+                    if (scale.grid) scale.grid.color = Chart.defaults.borderColor;
+                });
+            }
+            chart.update();
         });
     });
 
-    // ==========================================
-    // 3. LÓGICA DO TOOLTIP GLOBAL E DINÂMICO
-    // ==========================================
+    const autoSubmitSelects = document.querySelectorAll('.auto-submit');
+    autoSubmitSelects.forEach(select => select.addEventListener('change', function () { this.form.submit(); }));
+
     const tooltipBox = document.createElement('div');
     tooltipBox.className = 'dcd-global-tooltip';
     document.body.appendChild(tooltipBox);
 
-    const rows = document.querySelectorAll('.dcd-tooltip-row');
-
-    rows.forEach(row => {
+    document.querySelectorAll('.dcd-tooltip-row').forEach(row => {
         row.addEventListener('mouseenter', function () {
             const contentElement = this.querySelector('.tooltip-content-html');
             if (!contentElement) return;
 
-            // Injeta o conteúdo oculto da linha no balão global
             tooltipBox.innerHTML = contentElement.innerHTML;
             tooltipBox.classList.add('visible');
 
-            // Calcula a posição geométrica da linha (<tr>)
             const rect = this.getBoundingClientRect();
-
-            // Centraliza horizontalmente e coloca um pouco acima da linha
             let top = rect.top + window.scrollY - tooltipBox.offsetHeight - 10;
             const left = rect.left + window.scrollX + (rect.width / 2) - (tooltipBox.offsetWidth / 2);
 
-            // Prevenção de corte na borda superior da janela
             if (top < window.scrollY) {
                 top = rect.bottom + window.scrollY + 10;
                 tooltipBox.classList.add('tooltip-bottom');
@@ -129,11 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         row.addEventListener('mouseleave', function () {
             tooltipBox.classList.remove('visible');
-            setTimeout(() => {
-                if (!tooltipBox.classList.contains('visible')) {
-                    tooltipBox.innerHTML = '';
-                }
-            }, 150);
+            setTimeout(() => { if (!tooltipBox.classList.contains('visible')) tooltipBox.innerHTML = ''; }, 150);
         });
     });
 });
