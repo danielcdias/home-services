@@ -1,0 +1,31 @@
+/* Centraliza verticalmente na parte restante da tela */
+.hero-section {
+    min-height: 50vh;
+}
+
+/* Animações de entrada suaves */
+.fade-in-up {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.8s ease forwards;
+}
+
+.delay-1 {
+    animation-delay: 0.2s;
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Garante que o botão de tema da index funcione visualmente igual ao do base */
+.theme-toggle-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

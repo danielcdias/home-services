@@ -1,10 +1,22 @@
+from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from internet_status.models import InternetProvider
 
 
+def index_view(request: HttpRequest) -> HttpResponse:
+    """
+    Renderiza a página inicial pública (Landing Page / Portfólio).
+    """
+    return render(request, 'core/index.html')
+
+
+@login_required
 def dashboard_view(request: HttpRequest) -> HttpResponse:
+    """
+    Renderiza o painel de controle interno do Home Services.
+    """
     providers = InternetProvider.objects.filter(enabled=True)
     provider_data = []
 

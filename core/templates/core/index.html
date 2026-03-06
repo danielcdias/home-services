@@ -1,0 +1,46 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}
+  Daniel Dias | Desenvolvedor Python
+{% endblock %}
+
+{% block navbar %}
+  <nav class="navbar navbar-expand-lg bg-transparent py-4">
+    <div class="container">
+      <a class="navbar-brand fw-bold fs-4 text-body" href="/">Daniel Dias</a>
+
+      <button id="theme-toggle" class="btn btn-sm btn-outline-secondary rounded-circle ms-auto me-3 d-lg-none" title="Alternar Tema">☀️</button>
+
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#publicNav"><span class="navbar-toggler-icon"></span></button>
+
+      <div class="collapse navbar-collapse" id="publicNav">
+        <ul class="navbar-nav ms-auto align-items-center">
+          <li class="nav-item d-none d-lg-block me-3">
+            <button id="theme-toggle-desktop" class="btn btn-sm btn-outline-secondary rounded-circle theme-toggle-btn" title="Alternar Tema">☀️</button>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link fw-medium btn btn-outline-primary px-4 py-2 rounded-pill ms-lg-2" href="{% url 'core:dashboard' %}">Home-Service <span class="ms-2">🔒</span></a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+{% endblock %}
+
+{% block content %}
+  <link rel="stylesheet" href="{% static 'core/css/index.css' %}" />
+
+  <div class="d-flex flex-column justify-content-center align-items-center text-center hero-section">
+    <h1 class="h2 text-muted fw-light mb-5 fade-in-up delay-2">Python developer</h1>
+    <h2 class="h4 text-muted fw-light mb-5 fade-in-up delay-1">Personal page for my home services</h2>
+  </div>
+
+  <script src="{% static 'core/js/index.js' %}"></script>
+{% endblock %}
+
+{% block footer %}
+  <footer class="text-center py-4 mt-auto">
+    <small class="text-muted">powered by <strong>Django</strong> and <strong>Python</strong></small>
+  </footer>
+{% endblock %}

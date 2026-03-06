@@ -4,5 +4,8 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
-    path('', views.dashboard_view, name='dashboard'),
+    # Rota pública principal (Portfólio / Apresentação)
+    path('', views.index_view, name='index'),
+    # Rota do sistema (Painel de Monitoramento)
+    path('dashboard/', views.dashboard_view, name='dashboard'),
 ]
