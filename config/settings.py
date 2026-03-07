@@ -16,6 +16,7 @@ env = environ.Env(
         str, 'django-insecure-j@@b0)u$5*hgnoy02u1)qv6c*nv$%ib@+k(x!58bz229)bb1x#'),
     DJANGO_ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
     DJANGO_DATABASE_URL=(str, 'sqlite:///db.sqlite3'),
+    DJANGO_CSRF_TRUSTED_ORIGINS=(list, ['http://localhost:8000', 'http://127.0.0.1:8000']),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,6 +31,8 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env('DJANGO_ALLOWED_HOSTS')
+
+CSRF_TRUSTED_ORIGINS = env('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 
 # Application definition
