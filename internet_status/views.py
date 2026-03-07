@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404
 from django.utils.timezone import localtime
 from django.utils import timezone
@@ -23,6 +24,7 @@ def format_duration(td: datetime.timedelta) -> str:
         return f"{seconds}s"
 
 
+@login_required
 def provider_details(request: HttpRequest, provider_id: Any) -> HttpResponse:
     provider: InternetProvider = get_object_or_404(
         InternetProvider, id=provider_id, enabled=True)
@@ -218,6 +220,7 @@ def provider_details(request: HttpRequest, provider_id: Any) -> HttpResponse:
     return render(request, 'internet_status/details.html', context)
 
 
+@login_required
 def provider_yearly_summary(request: HttpRequest, provider_id: Any) -> HttpResponse:
     provider: InternetProvider = get_object_or_404(
         InternetProvider, id=provider_id, enabled=True)

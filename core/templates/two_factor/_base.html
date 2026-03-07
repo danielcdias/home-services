@@ -1,0 +1,10 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'two_factor/css/_base.css' %}" />
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'two_factor/js/_base.js' %}"></script>
+{% endblock %}

@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-br" data-bs-theme="light">
+<html lang="pt-br" data-bs-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,44 +12,94 @@
 
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32x32.png' %}" />
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'core/img/favicon-16x16.png' %}" />
-
     <link rel="shortcut icon" href="{% static 'core/img/favicon.ico' %}" />
-
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'core/img/apple-touch-icon.png' %}" />
 
     <link rel="stylesheet" href="{% static 'core/css/bootstrap.min.css' %}" />
     <link rel="stylesheet" href="{% static 'core/css/style.css' %}" />
 
     <script src="{% static 'core/js/theme.js' %}"></script>
-  </head>
-  <body class="bg-body-tertiary">
-    <nav class="navbar navbar-expand-lg navbar-dark shadow-sm bg-brand-primary">
-      <div class="container">
-        <a class="navbar-brand d-flex align-items-center" href="/">
-          <img src="{% static 'core/img/home-services_logo.png' %}" alt="Logo Home Services" class="navbar-logo me-2" />
-          Home Services
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav ms-auto align-items-center">
-            <li class="nav-item">
-              <a class="nav-link active" href="/">Dashboard</a>
-            </li>
-            <li class="nav-item">
-              <button id="theme-toggle" class="btn btn-outline-light rounded-circle ms-lg-3 mt-2 mt-lg-0" title="Alternar Tema">🌙</button>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </nav>
 
-    <main class="container my-5">
+    {% block extra_head %}
+
+    {% endblock %}
+  </head>
+
+  <body class="bg-body-tertiary d-flex flex-column min-vh-100">
+    {% block navbar %}
+      <nav class="navbar navbar-expand-lg navbar-dark shadow-sm bg-brand-primary">
+        <div class="container">
+          <a class="navbar-brand d-flex align-items-center" href="/">
+            <img src="{% static 'core/img/home-services_logo.png' %}" alt="Logo Home Services" class="navbar-logo me-2" />
+            Home Services
+          </a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+              {% if user.is_authenticated %}
+                <li class="nav-item">
+                  <a class="nav-link active" href="{% url 'core:dashboard' %}">Dashboard</a>
+                </li>
+
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle" href="#" id="appsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Aplicações</a>
+                  <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="appsDropdown">
+                    <li>
+                      <a class="dropdown-item py-2 fw-medium" href="https://ha.homeserver" target="_blank">🏠 Home Assistant</a>
+                    </li>
+
+                    <li>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <h6 class="dropdown-header text-uppercase small">Acesso Restrito (LAN)</h6>
+                    </li>
+
+                    <li>
+                      <a class="dropdown-item py-2" href="http://pihole.homeserver/admin/" target="_blank">🛡️ Pi-hole</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2" href="http://komodo.homeserver" target="_blank">🦎 Komodo</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2" href="https://webmin.homeserver" target="_blank">⚙️ Webmin</a>
+                    </li>
+                    <li>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2 text-danger fw-bold" href="{% url 'logout' %}">🚪 Sair (Logout)</a>
+                    </li>
+                  </ul>
+                </li>
+              {% endif %}
+
+              <li class="nav-item">
+                <button id="theme-toggle" class="btn btn-outline-light rounded-circle ms-lg-3 mt-2 mt-lg-0" title="Alternar Tema">☀️</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+    {% endblock %}
+
+    <main class="container my-5 flex-grow-1">
       {% block content %}
 
       {% endblock %}
     </main>
 
+    {% block footer %}
+      <footer class="text-center py-3 mt-auto border-top">
+        <small class="text-muted">Home Services &copy;{% now 'Y' %}</small>
+      </footer>
+    {% endblock %}
+
     <script src="{% static 'core/js/bootstrap.bundle.min.js' %}?v={% now 'U' %}"></script>
     <script src="{% static 'core/js/main.js' %}?v={% now 'U' %}"></script>
+
+    {% block extra_js %}
+
+    {% endblock %}
   </body>
 </html>

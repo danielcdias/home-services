@@ -41,9 +41,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
     'core',
     'internet_status',
+    'rest_framework',
+    'django_otp',
+    'django_otp.plugins.otp_static',
+    'django_otp.plugins.otp_totp',
+    'two_factor',
 ]
 
 MIDDLEWARE = [
@@ -52,6 +56,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
+    'core.middleware.Force2FASetupMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -206,3 +212,8 @@ SENDER_EMAIL = env('MAILERSEND_SENDER_EMAIL',
                    default='noreplay@danieldias.dev.br')
 SENDER_NAME = env(
     'SENDER_NAME', default='Monitor de Rede - Casa Dani & Stephie')
+
+# --- Configurações de Login e 2FA ---
+LOGIN_URL = 'two_factor:login'
+# Redireciona para o dashboard após o login com sucesso
+LOGIN_REDIRECT_URL = 'core:dashboard'
