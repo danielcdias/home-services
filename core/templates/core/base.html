@@ -21,6 +21,7 @@
     <script src="{% static 'core/js/theme.js' %}"></script>
 
     {% block extra_head %}
+
     {% endblock %}
   </head>
 
@@ -35,11 +36,46 @@
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
           <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto align-items-center">
+              {% if user.is_authenticated %}
+                <li class="nav-item">
+                  <a class="nav-link active" href="{% url 'core:dashboard' %}">Dashboard</a>
+                </li>
+
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle" href="#" id="appsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Aplicações</a>
+                  <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="appsDropdown">
+                    <li>
+                      <a class="dropdown-item py-2 fw-medium" href="https://ha.homeserver" target="_blank">🏠 Home Assistant</a>
+                    </li>
+
+                    <li>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <h6 class="dropdown-header text-uppercase small">Acesso Restrito (LAN)</h6>
+                    </li>
+
+                    <li>
+                      <a class="dropdown-item py-2" href="http://pihole.homeserver/admin/" target="_blank">🛡️ Pi-hole</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2" href="http://komodo.homeserver" target="_blank">🦎 Komodo</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2" href="https://webmin.homeserver" target="_blank">⚙️ Webmin</a>
+                    </li>
+                    <li>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2 text-danger fw-bold" href="{% url 'logout' %}">🚪 Sair (Logout)</a>
+                    </li>
+                  </ul>
+                </li>
+              {% endif %}
+
               <li class="nav-item">
-                <a class="nav-link active" href="{% url 'core:dashboard' %}">Dashboard</a>
-              </li>
-              <li class="nav-item">
-                <button id="theme-toggle" class="btn btn-outline-light rounded-circle ms-lg-3 mt-2 mt-lg-0" title="Alternar Tema">🌙</button>
+                <button id="theme-toggle" class="btn btn-outline-light rounded-circle ms-lg-3 mt-2 mt-lg-0" title="Alternar Tema">☀️</button>
               </li>
             </ul>
           </div>
@@ -63,6 +99,7 @@
     <script src="{% static 'core/js/main.js' %}?v={% now 'U' %}"></script>
 
     {% block extra_js %}
+
     {% endblock %}
   </body>
 </html>

@@ -1,6 +1,7 @@
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 
 from internet_status.models import InternetProvider
 
@@ -59,3 +60,11 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, 'core/dashboard.html', context)
+
+
+def custom_logout_view(request: HttpRequest) -> HttpResponse:
+    """
+    Desconecta o usuário de forma segura e redireciona para a página inicial pública.
+    """
+    logout(request)
+    return redirect('core:index')
