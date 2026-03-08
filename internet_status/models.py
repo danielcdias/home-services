@@ -1,7 +1,18 @@
+from croniter import croniter
 from decimal import Decimal
-from django.db import models
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
 from geopy.distance import geodesic
+
+
+# TODO Continuar na última resposta do Gemini, na coversa
+#      Home-services - Django.
+
+
+def validate_cron_expression(value):
+    if not croniter.is_valid(value):
+        raise ValidationError(f"'{value}' não é uma expressão CRON válida.")
 
 
 class InternetProvider(models.Model):
@@ -17,12 +28,20 @@ class InternetProvider(models.Model):
         verbose_name="Upload Contratado (Mbps)",
         help_text="Velocidade de upload contratada junto à operadora."
     )
-    status_check_interval = models.IntegerField(
-        null=False,
-        help_text="Interval in minutes to check the connection status")
-    speed_test_interval = models.IntegerField(
-        null=False,
-        help_text="Interval in minutes to perform speed tests")
+    status_check_interval = models.CharField(
+        max_length=100,
+        default='*/5 * * * *',
+        validators=[validate_cron_expression],
+        verbose_name="Frequência do Ping (CRON)",
+        help_text="Ex: '*/5 * * * *' para a cada 5 min."
+    )
+    speed_test_interval = models.CharField(
+        max_length=100,
+        default='0 * * * *',
+        validators=[validate_cron_expression],
+        verbose_name="Frequência do Speedtest (CRON)",
+        help_text="Ex: '0 * * * *' para a cada hora exata."
+    )
     minimum_hosts_to_ping = models.IntegerField(
         null=False,
         help_text="Minimum number of hosts to ping for status checks", default=3)
