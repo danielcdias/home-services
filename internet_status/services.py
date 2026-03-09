@@ -1,6 +1,7 @@
 import logging
 import ping3
 import speedtest
+import requests
 
 from typing import Tuple
 
@@ -56,83 +57,114 @@ class InternetCheck(metaclass=SingletonMeta):
             'tests_results': [],
             'thresholds': {}
         }
-        hosts_to_ping = HostsToPing.objects.filter(
-            provider=provider, enabled=True)
-        for host in hosts_to_ping:
+        
+        hosts_to_test = HostsToPing.objects.filter(provider=provider, enabled=True)
+        
+        http_total = 0
+        http_success = 0
+        icmp_total = 0
+        icmp_success = 0
+        total_icmp_latency = 0.0
+
+        for host in hosts_to_test:
             result = {
                 'name': host.name,
                 'hostname_or_ipaddress': host.hostname_or_ipaddress,
-                'result': 0,
+                'check_type': host.check_type,
+                'result': 0, # Guardará a latência em ms para ambos os casos
                 'success': False,
                 'exception': None,
             }
-            try:
-                ping_result = ping3.ping(host.hostname_or_ipaddress)
-                if ping_result is not False and ping_result is not None:
-                    result['result'] = ping_result
-                    result['success'] = True
-            except Exception as ex:
-                log_error(logger, "Erro executando ping.", ex)
-                result['exception'] = str(ex)
+
+            if host.check_type == 'HTTP':
+                http_total += 1
+                try:
+                    # Timeout curto de 3s. Queremos apenas o cabeçalho 204
+                    response = requests.get(host.hostname_or_ipaddress, timeout=3)
+                    if response.status_code == 204:
+                        result['success'] = True
+                        result['result'] = response.elapsed.total_seconds() * 1000
+                        http_success += 1
+                    else:
+                        result['exception'] = f"Status inesperado: {response.status_code}"
+                except requests.exceptions.RequestException as ex:
+                    result['exception'] = str(ex)
+
+            elif host.check_type == 'ICMP':
+                icmp_total += 1
+                try:
+                    ping_result = ping3.ping(host.hostname_or_ipaddress, timeout=2)
+                    if ping_result is not False and ping_result is not None:
+                        result['success'] = True
+                        result['result'] = ping_result * 1000 # Convertendo para ms
+                        icmp_success += 1
+                        total_icmp_latency += result['result']
+                    else:
+                        result['exception'] = "Timeout"
+                except Exception as ex:
+                    log_error(logger, "Erro executando ping ICMP.", ex)
+                    result['exception'] = str(ex)
+                    
             result_data['tests_results'].append(result)
 
-        # Análise dos pings de acordo com os thresholds do provider
-        total_hosts = len(result_data['tests_results'])
-        successful_pings = sum(
-            1 for r in result_data['tests_results'] if r['success'])
-        failed_pings = total_hosts - successful_pings
+        # === CÁLCULO DAS MÉTRICAS ===
+        total_hosts = http_total + icmp_total
+        icmp_loss_pct = 0.0
+        avg_icmp_latency = 0.0
+        
+        if icmp_total > 0:
+            icmp_loss_pct = ((icmp_total - icmp_success) / icmp_total) * 100
+            if icmp_success > 0:
+                avg_icmp_latency = total_icmp_latency / icmp_success
 
-        success_rate = (successful_pings /
-                        total_hosts) if total_hosts > 0 else 0
-        failure_rate = (failed_pings / total_hosts) if total_hosts > 0 else 0
-
-        # Adiciona informações de cálculo e thresholds ao resultado
         result_data['thresholds'] = {
             'provider_config': {
                 'minimum_hosts_to_ping': provider.minimum_hosts_to_ping,
-                'status_ping_error_unstable_threshold': float(provider.status_ping_error_unstable_threshold),
-                'status_ping_error_disconnected_threshold': float(provider.status_ping_error_disconnected_threshold),
-                'status_ping_success_connected_threshold': float(provider.status_ping_success_connected_threshold),
+                'unstable_packet_loss_threshold': float(provider.unstable_packet_loss_threshold),
+                'unstable_latency_threshold': float(provider.unstable_latency_threshold),
             },
             'calculation': {
-                'total_hosts': total_hosts,
-                'successful_pings': successful_pings,
-                'failed_pings': failed_pings,
-                'success_rate': round(success_rate, 2),
-                'failure_rate': round(failure_rate, 2),
+                'http_total': http_total,
+                'http_success': http_success,
+                'icmp_total': icmp_total,
+                'icmp_loss_pct': round(icmp_loss_pct, 2),
+                'avg_icmp_latency': round(avg_icmp_latency, 2),
             },
             'reason': ''
         }
 
-        # Verifica a quantidade mínima de hosts para ping
+        # === MATRIZ DE DECISÃO ===
+        
+        # Regra 1: Validação Mínima
         if total_hosts < provider.minimum_hosts_to_ping:
             result_status = StatusChoices.UNKNOWN
-            result_data['thresholds']['reason'] = (
-                f"Número de hosts ({total_hosts}) "
-                f"inferior ao mínimo exigido ({provider.minimum_hosts_to_ping})."
-            )
+            result_data['thresholds']['reason'] = f"Apenas {total_hosts} hosts configurados. Mínimo exigido: {provider.minimum_hosts_to_ping}."
             return result_status, result_data
 
-        if success_rate >= float(provider.status_ping_success_connected_threshold):
-            result_status = StatusChoices.CONNECTED
-            result_data['thresholds']['reason'] = (
-                f"Taxa de sucesso ({success_rate:.2f}) atingiu ou superou o "
-                f"threshold de conectado ({provider.status_ping_success_connected_threshold})."
-            )
-        elif failure_rate >= float(provider.status_ping_error_disconnected_threshold):
+        # Regra 2: HTTP é o Rei (Se HTTP está configurado e todos falharam, a internet caiu, ignoramos o ping)
+        if http_total > 0 and http_success == 0:
             result_status = StatusChoices.DISCONNECTED
-            result_data['thresholds']['reason'] = (
-                f"Taxa de falha ({failure_rate:.2f}) atingiu ou superou o "
-                f"threshold de desconectado ({provider.status_ping_error_disconnected_threshold})."
-            )
-        else:
-            # Tudo o que não for perfeito nem crítico será considerado instável,
-            # fechando a lacuna de "unknown".
+            result_data['thresholds']['reason'] = "FALHA CRÍTICA: Nenhum teste HTTP 204 obteve sucesso. Possível falha de DNS ou bloqueio na camada 7."
+            return result_status, result_data
+            
+        # Regra 3: Fallback caso o usuário não tenha configurado nenhum HTTP (comportamento legado)
+        if http_total == 0 and icmp_total > 0 and icmp_success == 0:
+            result_status = StatusChoices.DISCONNECTED
+            result_data['thresholds']['reason'] = "FALHA CRÍTICA: 100% de perda de pacotes ICMP (Nenhum teste HTTP configurado)."
+            return result_status, result_data
+
+        # Regra 4: Análise de Instabilidade (Degradação de ICMP)
+        if icmp_loss_pct >= provider.unstable_packet_loss_threshold:
             result_status = StatusChoices.UNSTABLE
-            result_data['thresholds']['reason'] = (
-                f"A conexão não atingiu os limites de sucesso ({provider.status_ping_success_connected_threshold}) "
-                f"nem de desconexão total, registando uma taxa de sucesso de {success_rate:.2f}. Classificada como Instável."
-            )
+            result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Perda de pacotes ICMP ({icmp_loss_pct:.1f}%) ultrapassou o limite ({provider.unstable_packet_loss_threshold}%)."
+        elif avg_icmp_latency >= provider.unstable_latency_threshold:
+            result_status = StatusChoices.UNSTABLE
+            result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Latência média ICMP ({avg_icmp_latency:.1f}ms) ultrapassou o limite ({provider.unstable_latency_threshold}ms)."
+        
+        # Regra 5: Conexão Saudável
+        else:
+            result_status = StatusChoices.CONNECTED
+            result_data['thresholds']['reason'] = "NORMAL: Conectividade validada com sucesso na Camada 7 e limites de ICMP normais."
 
         return result_status, result_data
 
@@ -154,15 +186,6 @@ class InternetCheck(metaclass=SingletonMeta):
     def _speedtest(self, provider: InternetProvider) -> dict:
         """
         Executa um teste de velocidade usando a biblioteca speedtest-cli.
-
-        Args:
-            provider (InternetProvider): A instância do provedor de internet
-                                         com as configurações de threshold.
-
-        Returns:
-            dict: Um dicionário contendo as velocidades de download/upload em Mbps,
-                  a latência em ms, os resultados completos do teste e os
-                  thresholds configurados para o provedor.
         """
         result_data = {
             'download_speed_mbps': 0,
@@ -181,20 +204,31 @@ class InternetCheck(metaclass=SingletonMeta):
         }
 
         try:
-            st = speedtest.Speedtest()
+            # CORREÇÃO: Forçar conexão segura (HTTPS) para evitar bloqueios da API Ookla
+            st = speedtest.Speedtest(secure=True)
+            
+            if provider.id_provider_speedtest:
+                try:
+                    # Garantir que o ID seja passado como inteiro dentro da lista
+                    st.get_servers(servers=[int(provider.id_provider_speedtest)])
+                except (speedtest.NoMatchedServers, ValueError):
+                    logger.warning(f"Servidor Speedtest ID {provider.id_provider_speedtest} não encontrado ou inválido. Usando fallback automático.")
+                    st.get_servers()
+            else:
+                st.get_servers()
+                
             try:
-                st.get_servers(servers=[provider.id_provider_speedtest])
-            except speedtest.NoMatchedServers:
-                st.get_servers([])
                 st.get_best_server()
+            except speedtest.SpeedtestBestServerFailure:
+                # Se a lista de servidores vier vazia da Ookla, falha graciosamente
+                raise Exception("A Ookla recusou a conexão ou não retornou servidores válidos na sua região no momento.")
+
             st.download()
             st.upload()
             test_results = st.results.dict()
 
             result_data['test_result'] = test_results
 
-            # A biblioteca speedtest-cli retorna valores em bits por segundo.
-            # Convertendo para megabits por segundo (Mbps) -> valor / 1_000_000
             if test_results.get('download'):
                 result_data['download_speed_mbps'] = round(
                     test_results['download'] / 1_000_000, 2)
