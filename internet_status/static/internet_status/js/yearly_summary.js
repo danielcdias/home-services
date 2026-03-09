@@ -4,14 +4,27 @@ document.addEventListener('DOMContentLoaded', function () {
         return el ? JSON.parse(el.textContent) : [];
     }
 
-    const labels = getDjangoData('monthLabels');
+    const rawLabels = getDjangoData('monthLabels');
+    const rawDown = getDjangoData('monthlyDown');
+    const rawUp = getDjangoData('monthlyUp');
+
+    // Filtro para não exibir meses futuros (corta o array onde os dados param)
+    let lastIdx = rawDown.length - 1;
+    while (lastIdx >= 0 && rawDown[lastIdx] === 0 && rawUp[lastIdx] === 0) {
+        lastIdx--;
+    }
+    if (lastIdx < 0) lastIdx = rawLabels.length - 1;
+
+    const labels = rawLabels.slice(0, lastIdx + 1);
+    const down = rawDown.slice(0, lastIdx + 1);
+    const up = rawUp.slice(0, lastIdx + 1);
+
     const activeCharts = [];
 
     // --- CONFIGURAÇÃO GLOBAL INICIAL DE CORES DO CHART.JS ---
     const updateChartColors = () => {
         const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
 
-        // Uso estrito de hexadecimais para garantir alto contraste nos labels
         const textColor = isDark ? '#e9ecef' : '#212529';
         const gridColor = isDark ? '#495057' : '#dee2e6';
 
@@ -27,22 +40,78 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const speedChartEl = document.getElementById('yearlySpeedChart');
     if (speedChartEl) {
-        const down = getDjangoData('monthlyDown');
-        const up = getDjangoData('monthlyUp');
-        const CONTRACTED_DOWN = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
-        const CONTRACTED_UP = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
-        const lineContratadoDown = Array(labels.length).fill(CONTRACTED_DOWN);
-        const lineContratadoUp = Array(labels.length).fill(CONTRACTED_UP);
+        const contractedDown = parseFloat(document.getElementById('contractedDown')?.textContent) || 0;
+        const contractedUp = parseFloat(document.getElementById('contractedUp')?.textContent) || 0;
+        const minDown = parseFloat(document.getElementById('minDown')?.textContent) || 0;
+        const minUp = parseFloat(document.getElementById('minUp')?.textContent) || 0;
 
         const speedChart = new Chart(speedChartEl, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    { label: 'Download Médio (Mbps)', data: down, backgroundColor: 'rgba(13, 110, 253, 0.8)' },
-                    { label: 'Download Contratado', data: lineContratadoDown, type: 'line', borderColor: '#0d6efd', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 },
-                    { label: 'Upload Médio (Mbps)', data: up, backgroundColor: 'rgba(13, 202, 240, 0.8)' },
-                    { label: 'Upload Contratado', data: lineContratadoUp, type: 'line', borderColor: '#0dcaf0', borderDash: [5, 5], pointRadius: 0, fill: false, borderWidth: 2 }
+                    {
+                        label: 'Download Médio (Mbps)',
+                        data: down,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Upload Médio (Mbps)',
+                        data: up,
+                        borderColor: '#0dcaf0',
+                        backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Contratado (Download)',
+                        data: Array(labels.length).fill(contractedDown),
+                        borderColor: 'rgba(25, 135, 84, 0.5)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
+                    },
+                    {
+                        label: 'Contratado (Upload)',
+                        data: Array(labels.length).fill(contractedUp),
+                        borderColor: 'rgba(23, 162, 184, 0.5)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
+                    },
+                    {
+                        label: 'Limite Aceitável (Download)',
+                        data: Array(labels.length).fill(minDown),
+                        borderColor: 'rgba(220, 53, 69, 0.7)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
+                    },
+                    {
+                        label: 'Limite Aceitável (Upload)',
+                        data: Array(labels.length).fill(minUp),
+                        borderColor: 'rgba(253, 126, 20, 0.7)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
+                    }
                 ]
             },
             options: { responsive: true, interaction: { mode: 'index', intersect: false } }
@@ -50,34 +119,34 @@ document.addEventListener('DOMContentLoaded', function () {
         activeCharts.push(speedChart);
     }
 
-    const achievedChartEl = document.getElementById('yearlySpeedAchievedChart');
-    if (achievedChartEl) {
-        const downAchieved = getDjangoData('monthlyDownAchievedPct');
-        const downNotAchieved = getDjangoData('monthlyDownNotAchievedPct');
-        const upAchieved = getDjangoData('monthlyUpAchievedPct');
-        const upNotAchieved = getDjangoData('monthlyUpNotAchievedPct');
+    const speedAchievedChartEl = document.getElementById('yearlySpeedAchievedChart');
+    if (speedAchievedChartEl) {
+        const d_achieved = getDjangoData('monthlyDownAchievedPct').slice(0, lastIdx + 1);
+        const d_not_achieved = getDjangoData('monthlyDownNotAchievedPct').slice(0, lastIdx + 1);
+        const u_achieved = getDjangoData('monthlyUpAchievedPct').slice(0, lastIdx + 1);
+        const u_not_achieved = getDjangoData('monthlyUpNotAchievedPct').slice(0, lastIdx + 1);
 
-        const achievedChart = new Chart(achievedChartEl, {
+        const speedAchievedChart = new Chart(speedAchievedChartEl, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
-                    { label: 'Download Atingido (%)', data: downAchieved, backgroundColor: '#0d6efd', stack: 'Stack 0' },
-                    { label: 'Download Abaixo (%)', data: downNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 0' },
-                    { label: 'Upload Atingido (%)', data: upAchieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
-                    { label: 'Upload Abaixo (%)', data: upNotAchieved, backgroundColor: '#8b0000', stack: 'Stack 1' }
+                    { label: 'Download ≥ Contratado (%)', data: d_achieved, backgroundColor: '#198754', stack: 'Stack 0' },
+                    { label: 'Download < Contratado (%)', data: d_not_achieved, backgroundColor: '#dc3545', stack: 'Stack 0' },
+                    { label: 'Upload ≥ Contratado (%)', data: u_achieved, backgroundColor: '#0dcaf0', stack: 'Stack 1' },
+                    { label: 'Upload < Contratado (%)', data: u_not_achieved, backgroundColor: '#ffc107', stack: 'Stack 1' }
                 ]
             },
             options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
         });
-        activeCharts.push(achievedChart);
+        activeCharts.push(speedAchievedChart);
     }
 
     const pingChartEl = document.getElementById('yearlyPingChart');
     if (pingChartEl) {
-        const conn = getDjangoData('monthlyConnPct');
-        const unst = getDjangoData('monthlyUnstPct');
-        const disc = getDjangoData('monthlyDiscPct');
+        const conn = getDjangoData('monthlyConnPct').slice(0, lastIdx + 1);
+        const unst = getDjangoData('monthlyUnstPct').slice(0, lastIdx + 1);
+        const disc = getDjangoData('monthlyDiscPct').slice(0, lastIdx + 1);
 
         const pingChart = new Chart(pingChartEl, {
             type: 'bar',
@@ -98,7 +167,6 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addEventListener('themeChanged', () => {
         updateChartColors();
         activeCharts.forEach(chart => {
-            // Força a atualização profunda nas opções de eixos (X e Y) de cada gráfico
             if (chart.options.scales) {
                 Object.values(chart.options.scales).forEach(scale => {
                     if (scale.ticks) scale.ticks.color = Chart.defaults.color;
@@ -110,9 +178,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const autoSubmitSelects = document.querySelectorAll('.auto-submit');
-    autoSubmitSelects.forEach(select => {
-        select.addEventListener('change', function () {
-            this.form.submit();
-        });
-    });
+    autoSubmitSelects.forEach(select => select.addEventListener('change', function () { this.form.submit(); }));
 });

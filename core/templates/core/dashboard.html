@@ -26,8 +26,14 @@
               <div class="col-4 border-end">
                 <small class="text-muted d-block mb-1">Ping</small>
                 <span class="fs-5 fw-bold text-body">
-                  {% if data.latest_speed %}
-                    {{ data.latest_speed.latency|floatformat:0 }} <small class="fs-6 text-muted fw-normal">ms</small>
+                  {% if data.latest_status %}
+                    {% if data.latest_status.ping_results.thresholds %}
+                      {{ data.latest_status.ping_results.thresholds.calculation.avg_icmp_latency|floatformat:0 }} <small class="fs-6 text-muted fw-normal">ms</small>
+                    {% elif data.latest_status.ping_results.avg_latency %}
+                      {{ data.latest_status.ping_results.avg_latency|floatformat:0 }} <small class="fs-6 text-muted fw-normal">ms</small>
+                    {% else %}
+                      --
+                    {% endif %}
                   {% else %}
                     --
                   {% endif %}

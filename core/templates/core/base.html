@@ -27,36 +27,38 @@
 
   <body class="bg-body-tertiary d-flex flex-column min-vh-100">
     {% block navbar %}
-      <nav class="navbar navbar-expand-lg navbar-dark shadow-sm bg-brand-primary">
+      <nav class="navbar navbar-expand-lg border-bottom shadow-sm">
         <div class="container">
-          <a class="navbar-brand d-flex align-items-center" href="/">
-            <img src="{% static 'core/img/home-services_logo.png' %}" alt="Logo Home Services" class="navbar-logo me-2" />
-            Home Services
+          <a class="navbar-brand fw-bold" href="/">
+            <img src="{% static 'core/img/home-services_logo.png' %}" alt="Logo" width="40" height="40" class="me-2 align-middle d-inline-block" style="border-radius: 8px;" />
+            <span class="align-middle">Home Services</span>
           </a>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+
           <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-center">
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">
               {% if user.is_authenticated %}
-                <li class="nav-item">
-                  <a class="nav-link active" href="{% url 'core:dashboard' %}">Dashboard</a>
-                </li>
-
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" id="appsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Aplicações</a>
-                  <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="appsDropdown">
+                  <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Aplicações</a>
+                  <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="navbarDropdown">
                     <li>
-                      <a id="link-ha" class="dropdown-item py-2 fw-medium" href="#" target="_blank">🏠 Home Assistant</a>
+                      <a class="dropdown-item py-2 fw-medium text-primary" href="{% url 'admin:index' %}">🎛️ Painel Admin</a>
                     </li>
-
                     <li>
                       <hr class="dropdown-divider" />
                     </li>
                     <li>
-                      <h6 class="dropdown-header text-uppercase small">Acesso Restrito (LAN)</h6>
+                      <a class="dropdown-item py-2" href="http://homeassistant.homeserver" target="_blank">🏠 Home Assistant</a>
                     </li>
-
                     <li>
-                      <a class="dropdown-item py-2" href="http://pihole.homeserver/admin/" target="_blank">🛡️ Pi-hole</a>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <h6 class="dropdown-header text-uppercase">Acesso Restrito (LAN)</h6>
+                    </li>
+                    <li>
+                      <a class="dropdown-item py-2" href="http://pihole.homeserver" target="_blank">🎯 Pi-hole</a>
                     </li>
                     <li>
                       <a class="dropdown-item py-2" href="http://komodo.homeserver" target="_blank">🦎 Komodo</a>
@@ -96,9 +98,7 @@
     {% endblock %}
 
     <script src="{% static 'core/js/bootstrap.bundle.min.js' %}?v={% now 'U' %}"></script>
-    <script src="{% static 'core/js/main.js' %}?v={% now 'U' %}"></script>
-
-    {% block extra_js %}
+    {% block extra_scripts %}
 
     {% endblock %}
   </body>

@@ -9,7 +9,13 @@
   <div class="row mb-4 align-items-center border-bottom pb-3">
     <div class="col-md-6 d-flex align-items-center">
       <a href="{% url 'internet_status:details' provider.id %}" class="btn btn-outline-secondary me-3">&larr; Voltar ao Detalhe</a>
-      <h2 class="mb-0">Resumo Anual: {{ provider.name }}</h2>
+      <div>
+        <h2 class="mb-0">Resumo Anual: {{ provider.name }}</h2>
+        <div class="d-flex flex-column mt-1">
+          <span class="text-muted small fw-bold">Velocidade Contratada: <span class="text-success">{{ provider.contracted_download_speed|floatformat:0 }} Mbps ↓</span> / <span class="text-success">{{ provider.contracted_upload_speed|floatformat:0 }} Mbps ↑</span></span>
+          <span class="text-muted small fw-bold">Garantia Mínima (SLA): <span class="text-warning">{{ provider.download_speed_minimum_threshold|floatformat:0 }} Mbps ↓</span> / <span class="text-warning">{{ provider.upload_speed_minimum_threshold|floatformat:0 }} Mbps ↑</span></span>
+        </div>
+      </div>
     </div>
 
     <div class="col-md-6 d-flex justify-content-md-end mt-3 mt-md-0">
@@ -32,7 +38,7 @@
     <div class="col-12 mb-4">
       <div class="card shadow-sm border-0">
         <div class="card-header bg-transparent pt-3 pb-2 border-bottom">
-          <h5 class="card-title fw-bold mb-0">Desempenho Médio de Velocidade (Mbps)</h5>
+          <h5 class="card-title fw-bold mb-0">Desempenho Médio Anual (Velocidade, Contratado e Limite Aceitável)</h5>
         </div>
         <div class="card-body">
           <canvas id="yearlySpeedChart" height="80"></canvas>
@@ -78,6 +84,9 @@
 
   {{ contracted_down|json_script:'contractedDown' }}
   {{ contracted_up|json_script:'contractedUp' }}
+
+  {{ min_down|json_script:'minDown' }}
+  {{ min_up|json_script:'minUp' }}
 
   <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
   <script src="{% static 'internet_status/js/yearly_summary.js' %}"></script>

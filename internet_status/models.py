@@ -6,10 +6,6 @@ from django.db import models
 from geopy.distance import geodesic
 
 
-# TODO Continuar na última resposta do Gemini, na coversa
-#      Home-services - Django.
-
-
 def validate_cron_expression(value):
     if not croniter.is_valid(value):
         raise ValidationError(f"'{value}' não é uma expressão CRON válida.")
@@ -45,61 +41,43 @@ class InternetProvider(models.Model):
     minimum_hosts_to_ping = models.IntegerField(
         null=False,
         help_text="Minimum number of hosts to ping for status checks", default=3)
-    status_ping_error_unstable_threshold = models.DecimalField(
-        max_digits=4,
-        decimal_places=2,
-        default=0.3,
-        validators=[
-            MinValueValidator(Decimal('0.00')),  # Minimum allowed value
-            MaxValueValidator(Decimal('1.00'))  # Maximum allowed value
-        ],
-        null=False,
-        help_text="Percentage of hosts with ping error to mark connection as unstable")
-    status_ping_error_disconnected_threshold = models.DecimalField(
-        max_digits=4,
-        decimal_places=2,
-        default=0.7,
-        validators=[
-            MinValueValidator(Decimal('0.00')),  # Minimum allowed value
-            MaxValueValidator(Decimal('1.00'))  # Maximum allowed value
-        ],
-        null=False,
-        help_text="Percentage of hosts with ping error to mark connection as disconnected")
-    status_ping_success_connected_threshold = models.DecimalField(
-        max_digits=4,
-        decimal_places=2,
-        default=0.8,
-        validators=[
-            MinValueValidator(Decimal('0.00')),  # Minimum allowed value
-            MaxValueValidator(Decimal('1.00'))  # Maximum allowed value
-        ],
-        null=False,
-        help_text="Percentage of hosts with successful ping to mark connection as connected")
+    unstable_packet_loss_threshold = models.FloatField(
+        default=30.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        verbose_name="Limite de Perda de Pacotes (%)",
+        help_text="Percentual máximo de perda de pacotes ICMP aceitável antes de marcar como Instável."
+    )
+    unstable_latency_threshold = models.FloatField(
+        default=150.0,
+        validators=[MinValueValidator(1.0)],
+        verbose_name="Limite de Latência ICMP (ms)",
+        help_text="Latência média máxima permitida antes de marcar a conexão como Instável."
+    )
     download_speed_minimum_threshold = models.FloatField(
         validators=[
-            MinValueValidator(1.0),  # Minimum allowed value
-            MaxValueValidator(10000.0)  # Maximum allowed value
+            MinValueValidator(1.0),  
+            MaxValueValidator(10000.0)  
         ],
         null=False,
         help_text="Minimum acceptable download speed in Mbps")
     download_speed_expected_threshold = models.FloatField(
         validators=[
-            MinValueValidator(1.0),  # Minimum allowed value
-            MaxValueValidator(10000.0)  # Maximum allowed value
+            MinValueValidator(1.0),  
+            MaxValueValidator(10000.0)
         ],
         null=False,
         help_text="Expected download speed in Mbps")
     upload_speed_minimum_threshold = models.FloatField(
         validators=[
-            MinValueValidator(1.0),  # Minimum allowed value
-            MaxValueValidator(10000.0)  # Maximum allowed value
+            MinValueValidator(1.0),  
+            MaxValueValidator(10000.0)
         ],
         null=False,
         help_text="Minimum acceptable upload speed in Mbps")
     upload_speed_expected_threshold = models.FloatField(
         validators=[
-            MinValueValidator(1.0),  # Minimum allowed value
-            MaxValueValidator(10000.0)  # Maximum allowed value
+            MinValueValidator(1.0),  
+            MaxValueValidator(10000.0)  
         ],
         null=False,
         help_text="Expected upload speed in Mbps")
@@ -140,24 +118,32 @@ class InternetProvider(models.Model):
 
     @property
     def destination_emails_list(self):
-        """
-        Retorna os e-mails como uma lista Python.
-        """
         if self.destination_emails:
             return [email.strip() for email in self.destination_emails.split(',') if email.strip()]
         return []
 
 
+class CheckTypeChoices(models.TextChoices):
+    ICMP_PING = 'ICMP', 'ICMP Ping'
+    HTTP_204 = 'HTTP', 'HTTP 204 (Captive Portal)'
+
+
 class HostsToPing(models.Model):
     name = models.CharField(max_length=255)
     hostname_or_ipaddress = models.CharField(
-        max_length=255, help_text="Hostname or IP address to ping")
+        max_length=255, help_text="Hostname/IP (para ICMP) ou URL completa (para HTTP, ex: http://clients3.google.com/generate_204)")
+    check_type = models.CharField(
+        max_length=4,
+        choices=CheckTypeChoices.choices,
+        default=CheckTypeChoices.ICMP_PING,
+        help_text="Selecione HTTP para URLs de Portal Cativo ou ICMP para pings tradicionais."
+    )
     enabled = models.BooleanField(default=True)
     provider = models.ForeignKey(
         InternetProvider, on_delete=models.CASCADE, related_name='hosts_to_ping')
 
     def __str__(self):
-        return f"{self.hostname_or_ipaddress} ({'Enabled' if self.enabled else 'Disabled'})"
+        return f"{self.hostname_or_ipaddress} ({self.check_type}) - {'Ativo' if self.enabled else 'Inativo'}"
 
     class Meta:
         unique_together = ['provider', 'hostname_or_ipaddress']
@@ -171,7 +157,6 @@ class StatusChoices(models.TextChoices):
 
 
 class ConnectionStatus(models.Model):
-
     status = models.CharField(
         max_length=20, choices=StatusChoices, default='unknown')
     last_checked = models.DateTimeField(auto_now_add=True)
@@ -199,7 +184,6 @@ class ConnectionSpeed(models.Model):
 
     @property
     def server_distance_km(self):
-        """Calcula a distância em km entre o cliente e o servidor de teste em tempo real."""
         try:
             client_data = self.full_results.get('test_result', {}).get('client', {})
             server_data = self.full_results.get('test_result', {}).get('server', {})
