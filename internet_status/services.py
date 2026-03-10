@@ -1,7 +1,9 @@
 import logging
 import ping3
-import speedtest
 import requests
+import subprocess
+import json
+import os
 
 from typing import Tuple
 
@@ -179,7 +181,7 @@ class InternetCheck(metaclass=SingletonMeta):
 
     def _speedtest(self, provider: InternetProvider) -> dict:
         """
-        Executa um teste de velocidade usando a biblioteca speedtest-cli.
+        Executa o teste de velocidade via subprocesso clonando o ambiente real.
         """
         result_data = {
             'download_speed_mbps': 0,
@@ -198,48 +200,38 @@ class InternetCheck(metaclass=SingletonMeta):
         }
 
         try:
-            st = None
-            best_server_found = False
+            base_cmd = "speedtest --json"
+            cmd = base_cmd
             
-            # A API da Ookla bloqueia frequentemente conexões. 
-            # A estratégia mais robusta é alternar entre HTTPS e HTTP para driblar firewalls.
-            for secure_mode in [True, False]:
-                try:
-                    st = speedtest.Speedtest(secure=secure_mode)
-                    
-                    if provider.id_provider_speedtest:
-                        try:
-                            st.get_servers(servers=[int(provider.id_provider_speedtest)])
-                        except Exception:
-                            logger.warning(f"Servidor Speedtest ID {provider.id_provider_speedtest} falhou com secure={secure_mode}. Tentando fallback global.")
-                            st.get_servers()
-                    else:
-                        st.get_servers()
-                        
-                    # É nesta linha que o bug (IndexError) da biblioteca ocorre.
-                    # Vamos contê-lo especificamente.
-                    st.get_best_server()
-                    best_server_found = True
-                    break # Sucesso absoluto! Quebra o loop.
-                    
-                except IndexError:
-                    # Captura especificamente o BUG da biblioteca speedtest-cli
-                    logger.debug(f"Bug IndexError do speedtest-cli detectado com secure={secure_mode}. Tentando protocolo alternativo.")
-                    continue
-                except speedtest.SpeedtestBestServerFailure:
-                    logger.debug(f"Falha ao obter melhor servidor com secure={secure_mode}. Tentando protocolo alternativo.")
-                    continue
-                except Exception as e:
-                    logger.debug(f"Erro na conexão Ookla com secure={secure_mode}: {e}")
-                    continue
+            if provider.id_provider_speedtest:
+                cmd += f" --server {int(provider.id_provider_speedtest)}"
+            
+            # Copia 100% das variáveis do seu Windows/venv atual para dentro do subprocesso
+            current_env = os.environ.copy()
+            
+            # shell=True abre um interpretador real do sistema operativo
+            process = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=90, env=current_env)
+            
+            if process.returncode != 0 and provider.id_provider_speedtest:
+                logger.warning(f"Falha ao usar o servidor {provider.id_provider_speedtest} via CLI. Tentando fallback global.")
+                process = subprocess.run(base_cmd, shell=True, capture_output=True, text=True, timeout=90, env=current_env)
 
-            if not best_server_found or st is None:
-                raise Exception("A Ookla bloqueou a conexão ou todos os pings de latência falharam (possível rate-limit no seu IP).")
+            if process.returncode != 0:
+                # Limpa os DeprecationWarnings do Python 3.12+ do log de erro para fácil leitura
+                stderr_clean = "\n".join([line for line in process.stderr.splitlines() if 'DeprecationWarning' not in line and '.py:' not in line]).strip()
+                error_msg = stderr_clean or process.stdout.strip() or "Erro desconhecido na CLI"
+                raise Exception(f"Erro na execução via terminal: {error_msg}")
 
-            # Executa o teste de fato
-            st.download()
-            st.upload()
-            test_results = st.results.dict()
+            out_text = process.stdout
+            
+            # Extração cirúrgica do JSON ignorando possíveis Warnings impressos antes
+            idx_start = out_text.find('{')
+            idx_end = out_text.rfind('}') + 1
+            
+            if idx_start == -1 or idx_end == 0:
+                raise ValueError(f"JSON não encontrado na saída do terminal: {out_text}")
+                
+            test_results = json.loads(out_text[idx_start:idx_end])
 
             result_data['test_result'] = test_results
 
@@ -252,8 +244,16 @@ class InternetCheck(metaclass=SingletonMeta):
             if test_results.get('ping'):
                 result_data['latency_ms'] = round(test_results['ping'], 2)
 
+        except subprocess.TimeoutExpired:
+            error_msg = "Timeout: O teste de velocidade via terminal excedeu o tempo limite de 90 segundos."
+            log_error(logger, error_msg, None)
+            result_data['exception'] = error_msg
+        except json.JSONDecodeError as ex:
+            error_msg = f"Erro ao interpretar saída da CLI do Speedtest: {process.stdout.strip()}"
+            log_error(logger, error_msg, ex)
+            result_data['exception'] = error_msg
         except Exception as ex:
-            log_error(logger, f"Erro executando speedtest para o provider {provider.name}.", ex)
+            log_error(logger, f"Erro executando speedtest CLI para o provider {provider.name}.", ex)
             result_data['exception'] = str(ex)
 
         return result_data
@@ -261,9 +261,11 @@ class InternetCheck(metaclass=SingletonMeta):
     def check_single_status(self, provider: InternetProvider):
         status, ping_results = self._ping(provider)
         if not self._save_ping_results(provider, ping_results, status):
-            logger.error(f"Erro salvando resultado do ping para provider {provider.name}.")
+            logger.error(
+                f"Erro salvando resultado do ping para provider {provider.name}.")
 
     def check_single_speed(self, provider: InternetProvider):
         speed_results = self._speedtest(provider)
         if not self._save_speed_results(provider, speed_results):
-            logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")
+            logger.error(
+                f"Erro salvando resultado do speedtest para provider {provider.name}.")
