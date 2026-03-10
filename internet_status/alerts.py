@@ -1,12 +1,27 @@
+import logging
 from django.conf import settings
 from mailersend import MailerSendClient
 
 from .models import InternetProvider, ConnectionSpeed, ConnectionStatus, StatusChoices
 
+logger = logging.getLogger(__name__)
+
 
 def send_alert_email(subject, text_content, to_emails):
     """Envia o e-mail usando a API oficial do MailerSend."""
-    mailer = MailerSendClient(settings.MAILERSEND_API_KEY)
+    api_key = getattr(settings, 'MAILERSEND_API_KEY', None)
+
+    # Se a chave de API não existir (ex: ambiente de desenvolvimento), 
+    # aborta o envio graciosamente sem causar erro (crash) no sistema.
+    if not api_key:
+        logger.warning(f"Alerta ignorado: Chave MAILERSEND_API_KEY não configurada. Assunto: '{subject}'")
+        return None
+
+    try:
+        mailer = MailerSendClient(api_key)
+    except ValueError as e:
+        logger.error(f"Erro de configuração do MailerSend: {e}")
+        return None
 
     # Formata a lista de destinatários para o padrão do MailerSend
     recipients = [{"name": "Admin", "email": email} for email in to_emails]
@@ -24,10 +39,10 @@ def send_alert_email(subject, text_content, to_emails):
 
     try:
         response = mailer.emails.send(email_params)
-        print(f"E-mail enviado com sucesso: {subject}")
+        logger.info(f"E-mail enviado com sucesso: {subject}")
         return response
     except Exception as e:
-        print(f"Erro ao enviar e-mail: {e}")
+        logger.error(f"Erro ao enviar e-mail: {e}")
         return None
 
 
@@ -36,55 +51,64 @@ def send_alert_email(subject, text_content, to_emails):
 def check_and_alert_speed(provider_id):
     """Verifica quedas de velocidade e dispara alertas."""
     provider = InternetProvider.objects.get(id=provider_id)
-    emails_destino = provider.destination_emails_list
+    emails_destino = [e.strip() for e in provider.destination_emails.split(',') if e.strip()]
 
-    if not emails_destino or provider.speed_drop_limit <= 0:
-        return  # Sem e-mails configurados ou limite desativado
+    if not emails_destino:
+        return
 
     limit = provider.speed_drop_limit
     last_tests = ConnectionSpeed.objects.filter(
         provider=provider).order_by('-last_tested')[:limit]
 
+    # Só avalia se já tiver testes suficientes armazenados
     if len(last_tests) < limit:
-        return  # Ainda não há testes suficientes no banco
+        return
 
-    # Verifica se TODOS os últimos 'X' testes estão abaixo de 100 Mbps
-    all_below_100 = all(test.download_speed < 100.0 for test in last_tests)
+    # Verifica se TODOS os últimos 'X' testes estão abaixo do mínimo aceitável
+    all_bad = True
+    for test in last_tests:
+        if (test.download_speed >= provider.download_speed_minimum_threshold and
+                test.upload_speed >= provider.upload_speed_minimum_threshold):
+            all_bad = False
+            break
 
-    if all_below_100 and not provider.speed_alert_active:
-        # Dispara o alerta de queda
-        subject = f"⚠️ ALERTA: Velocidade reduzida na interface ({provider.name})"
-        body = (f"A velocidade de download caiu para menos de 100 Mbps nos últimos {limit} "
-                f"testes consecutivos.\nÚltima velocidade registrada: "
-                f"{last_tests[0].download_speed} Mbps.\nVerifique o cabo ou a interface "
-                f"eth1 do dcd-router.")
+    # Se todos estiverem maus e o alerta ainda não foi ativado
+    if all_bad and not provider.speed_alert_active:
+        subject = f"🚨 ALERTA: Queda de Velocidade de Internet ({provider.name})"
+        body = (f"A velocidade da internet esteve abaixo do limite mínimo aceitável nos últimos {limit} testes.\\n"
+                f"Último Download: {last_tests[0].download_speed} Mbps\\n"
+                f"Último Upload: {last_tests[0].upload_speed} Mbps")
 
         send_alert_email(subject, body, emails_destino)
 
-        # Atualiza o estado para não gerar spam
+        # Marca que o alerta foi acionado para não fazer spam
         provider.speed_alert_active = True
         provider.save(update_fields=['speed_alert_active'])
 
-    elif not all_below_100 and provider.speed_alert_active:
-        # Se o alerta estava ativo, mas a velocidade mais recente voltou a >= 100, avisa que normalizou
+    # Se o alerta estava ativo, mas a internet já normalizou no último teste
+    elif not all_bad and provider.speed_alert_active:
         latest_test = last_tests[0]
-        if latest_test.download_speed >= 100.0:
-            subject = f"✅ NORMALIZADO: Velocidade da rede ({provider.name})"
-            body = (f"A velocidade de rede voltou ao normal.\nÚltima velocidade "
-                    f"registrada: {latest_test.download_speed} Mbps.")
+        if (latest_test.download_speed >= provider.download_speed_minimum_threshold and
+                latest_test.upload_speed >= provider.upload_speed_minimum_threshold):
+            
+            subject = f"✅ NORMALIZADO: Velocidade de Internet ({provider.name})"
+            body = (f"A velocidade da internet voltou ao normal.\\n"
+                    f"Download Atual: {latest_test.download_speed} Mbps\\n"
+                    f"Upload Atual: {latest_test.upload_speed} Mbps")
 
             send_alert_email(subject, body, emails_destino)
 
+            # Desativa o alerta
             provider.speed_alert_active = False
             provider.save(update_fields=['speed_alert_active'])
 
 
 def check_and_alert_connection(provider_id):
-    """Verifica quedas de conectividade e dispara alertas."""
+    """Verifica falhas de ping (conectividade) e dispara alertas."""
     provider = InternetProvider.objects.get(id=provider_id)
-    emails_destino = provider.destination_emails_list
+    emails_destino = [e.strip() for e in provider.destination_emails.split(',') if e.strip()]
 
-    if not emails_destino or provider.connection_drop_limit <= 0:
+    if not emails_destino:
         return
 
     limit = provider.connection_drop_limit
@@ -101,7 +125,7 @@ def check_and_alert_connection(provider_id):
     if all_bad and not provider.connection_alert_active:
         subject = f"🚨 ALERTA: Queda ou Instabilidade de Internet ({provider.name})"
         body = (f"A conexão falhou ou apresentou instabilidade nos últimos {limit} "
-                f"testes consecutivos.\nVerifique o link do provedor.")
+                f"testes consecutivos.\\nVerifique o link do provedor.")
 
         send_alert_email(subject, body, emails_destino)
 
