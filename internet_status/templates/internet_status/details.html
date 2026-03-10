@@ -13,7 +13,10 @@
       <a href="/" class="btn btn-outline-secondary me-3">&larr; Voltar</a>
       <div>
         <h2 class="mb-0">Painel: {{ provider.name }}</h2>
-        <span class="text-muted small fw-bold">Velocidade Contratada: <span class="text-primary">{{ provider.contracted_download_speed|floatformat:0 }} Mbps ↓</span> / <span class="text-info">{{ provider.contracted_upload_speed|floatformat:0 }} Mbps ↑</span></span>
+        <div class="d-flex flex-column mt-1">
+          <span class="text-muted small fw-bold">Velocidade Contratada: <span class="text-success">{{ provider.contracted_download_speed|floatformat:0 }} Mbps ↓</span> / <span class="text-success">{{ provider.contracted_upload_speed|floatformat:0 }} Mbps ↑</span></span>
+          <span class="text-muted small fw-bold">Garantia Mínima (SLA): <span class="text-warning">{{ provider.download_speed_minimum_threshold|floatformat:0 }} Mbps ↓</span> / <span class="text-warning">{{ provider.upload_speed_minimum_threshold|floatformat:0 }} Mbps ↑</span></span>
+        </div>
       </div>
     </div>
 
@@ -54,7 +57,7 @@
       <div class="col-12 mb-4">
         <div class="card shadow-sm border-0">
           <div class="card-header bg-transparent pt-3 pb-2 d-flex justify-content-between align-items-center border-bottom">
-            <h5 class="card-title fw-bold mb-0">Desempenho Médio Diário (Velocidade)</h5>
+            <h5 class="card-title fw-bold mb-0">Desempenho Médio Diário (Velocidade, Contratado e Limite Aceitável)</h5>
           </div>
           <div class="card-body">
             <canvas id="speedChart" height="80"></canvas>
@@ -154,8 +157,37 @@
                   {% for speed in monthly_speeds %}
                     <tr class="dcd-tooltip-row">
                       <td class="small align-middle">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
-                      <td class="align-middle {% if speed.download_speed < provider.contracted_download_speed %}text-danger fw-bold{% endif %}">{{ speed.download_speed }} Mbps</td>
-                      <td class="align-middle {% if speed.upload_speed < provider.contracted_upload_speed %}text-danger fw-bold{% endif %}">{{ speed.upload_speed }} Mbps</td>
+
+                      <td class="align-middle 
+                        {% if speed.download_speed >= provider.contracted_download_speed %}
+                          
+                          text-success fw-bold
+
+                        {% elif speed.download_speed >= provider.download_speed_minimum_threshold %}
+                          
+                          text-warning fw-bold
+
+                        {% else %}
+                          
+                          text-danger fw-bold
+
+                        {% endif %}">{{ speed.download_speed }} Mbps</td>
+
+                      <td class="align-middle 
+                        {% if speed.upload_speed >= provider.contracted_upload_speed %}
+                          
+                          text-success fw-bold
+
+                        {% elif speed.upload_speed >= provider.upload_speed_minimum_threshold %}
+                          
+                          text-warning fw-bold
+
+                        {% else %}
+                          
+                          text-danger fw-bold
+
+                        {% endif %}">{{ speed.upload_speed }} Mbps</td>
+
                       <td class="align-middle">{{ speed.latency }} ms</td>
 
                       <td class="d-none">
@@ -208,7 +240,6 @@
                   <tr>
                     <th>Data / Hora</th>
                     <th>Status</th>
-                    <th>Sucesso/Total (%)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,17 +257,34 @@
                           <span class="text-secondary fw-bold">Desconhecido</span>
                         {% endif %}
                       </td>
-                      <td class="fw-bold text-muted align-middle">{{ ping.successful_pings }}/{{ ping.total_hosts }} ({{ ping.success_rate_pct|floatformat:0 }}%)</td>
 
                       <td class="d-none">
-                        <div class="tooltip-content-html">
+                        <div class="tooltip-content-html text-start">
+                          {% if ping.ping_results.thresholds %}
+                            <div class="mb-2 pb-2 border-bottom border-secondary">
+                              <div class="fw-bold mb-1 text-info">Decisão do Sistema:</div>
+                              <div class="small mb-2">{{ ping.ping_results.thresholds.reason|default:'Motivo não registrado' }}</div>
+                              <div class="small">
+                                <strong>Métricas ICMP:</strong><br />
+                                Perda: {{ ping.ping_results.thresholds.calculation.icmp_loss_pct|floatformat:1 }}% | Latência: {{ ping.ping_results.thresholds.calculation.avg_icmp_latency|floatformat:1 }} ms
+                              </div>
+                            </div>
+                          {% endif %}
+
                           {% if ping.ping_results.tests_results %}
+                            <div class="fw-bold mb-1 text-info">Testes Individuais:</div>
                             {% for host in ping.ping_results.tests_results %}
-                              <div class="mb-1">
-                                -{% if host.success %}
-                                  <span class="text-success fw-bold">{{ host.name }} ({{ host.hostname_or_ipaddress }}): {{ host.result|floatformat:3 }} ms</span>
+                              <div class="mb-1 small">
+                                - {{ host.name }} ({{ host.check_type }}):{% if host.success %}
+                                  <span class="text-success fw-bold">
+                                    {% if host.check_type == 'HTTP' %}
+                                      {{ host.result|floatformat:0 }} ms (204 OK)
+                                    {% else %}
+                                      {{ host.result|floatformat:1 }} ms
+                                    {% endif %}
+                                  </span>
                                 {% else %}
-                                  <span class="text-danger fw-bold">{{ host.name }} ({{ host.hostname_or_ipaddress }}): Falhou</span>
+                                  <span class="text-danger fw-bold">{{ host.exception|default:'Falhou'|truncatechars:20 }}</span>
                                 {% endif %}
                               </div>
                             {% endfor %}
@@ -248,7 +296,7 @@
                     </tr>
                   {% empty %}
                     <tr>
-                      <td colspan="3" class="py-3">Sem pings executados.</td>
+                      <td colspan="2" class="py-3">Sem pings executados.</td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -276,6 +324,9 @@
   {{ filename_label|json_script:'filenameLabel' }}
   {{ contracted_down|json_script:'contractedDown' }}
   {{ contracted_up|json_script:'contractedUp' }}
+
+  {{ min_down|json_script:'minDown' }}
+  {{ min_up|json_script:'minUp' }}
 
   <script src="{% static 'internet_status/js/chart.umd.js' %}"></script>
   <script src="{% static 'internet_status/js/details.js' %}"></script>
