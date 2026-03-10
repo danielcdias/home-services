@@ -71,7 +71,7 @@ class InternetCheck(metaclass=SingletonMeta):
                 'name': host.name,
                 'hostname_or_ipaddress': host.hostname_or_ipaddress,
                 'check_type': host.check_type,
-                'result': 0, # Guardará a latência em ms para ambos os casos
+                'result': 0, 
                 'success': False,
                 'exception': None,
             }
@@ -96,7 +96,7 @@ class InternetCheck(metaclass=SingletonMeta):
                     ping_result = ping3.ping(host.hostname_or_ipaddress, timeout=2)
                     if ping_result is not False and ping_result is not None:
                         result['success'] = True
-                        result['result'] = ping_result * 1000 # Convertendo para ms
+                        result['result'] = ping_result * 1000 
                         icmp_success += 1
                         total_icmp_latency += result['result']
                     else:
@@ -135,33 +135,27 @@ class InternetCheck(metaclass=SingletonMeta):
 
         # === MATRIZ DE DECISÃO ===
         
-        # Regra 1: Validação Mínima
         if total_hosts < provider.minimum_hosts_to_ping:
             result_status = StatusChoices.UNKNOWN
             result_data['thresholds']['reason'] = f"Apenas {total_hosts} hosts configurados. Mínimo exigido: {provider.minimum_hosts_to_ping}."
             return result_status, result_data
 
-        # Regra 2: HTTP é o Rei (Se HTTP está configurado e todos falharam, a internet caiu, ignoramos o ping)
         if http_total > 0 and http_success == 0:
             result_status = StatusChoices.DISCONNECTED
             result_data['thresholds']['reason'] = "FALHA CRÍTICA: Nenhum teste HTTP 204 obteve sucesso. Possível falha de DNS ou bloqueio na camada 7."
             return result_status, result_data
             
-        # Regra 3: Fallback caso o usuário não tenha configurado nenhum HTTP (comportamento legado)
         if http_total == 0 and icmp_total > 0 and icmp_success == 0:
             result_status = StatusChoices.DISCONNECTED
             result_data['thresholds']['reason'] = "FALHA CRÍTICA: 100% de perda de pacotes ICMP (Nenhum teste HTTP configurado)."
             return result_status, result_data
 
-        # Regra 4: Análise de Instabilidade (Degradação de ICMP)
         if icmp_loss_pct >= provider.unstable_packet_loss_threshold:
             result_status = StatusChoices.UNSTABLE
             result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Perda de pacotes ICMP ({icmp_loss_pct:.1f}%) ultrapassou o limite ({provider.unstable_packet_loss_threshold}%)."
         elif avg_icmp_latency >= provider.unstable_latency_threshold:
             result_status = StatusChoices.UNSTABLE
             result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Latência média ICMP ({avg_icmp_latency:.1f}ms) ultrapassou o limite ({provider.unstable_latency_threshold}ms)."
-        
-        # Regra 5: Conexão Saudável
         else:
             result_status = StatusChoices.CONNECTED
             result_data['thresholds']['reason'] = "NORMAL: Conectividade validada com sucesso na Camada 7 e limites de ICMP normais."
@@ -204,25 +198,45 @@ class InternetCheck(metaclass=SingletonMeta):
         }
 
         try:
-            # CORREÇÃO: Forçar conexão segura (HTTPS) para evitar bloqueios da API Ookla
-            st = speedtest.Speedtest(secure=True)
+            st = None
+            best_server_found = False
             
-            if provider.id_provider_speedtest:
+            # A API da Ookla bloqueia frequentemente conexões. 
+            # A estratégia mais robusta é alternar entre HTTPS e HTTP para driblar firewalls.
+            for secure_mode in [True, False]:
                 try:
-                    # Garantir que o ID seja passado como inteiro dentro da lista
-                    st.get_servers(servers=[int(provider.id_provider_speedtest)])
-                except (speedtest.NoMatchedServers, ValueError):
-                    logger.warning(f"Servidor Speedtest ID {provider.id_provider_speedtest} não encontrado ou inválido. Usando fallback automático.")
-                    st.get_servers()
-            else:
-                st.get_servers()
-                
-            try:
-                st.get_best_server()
-            except speedtest.SpeedtestBestServerFailure:
-                # Se a lista de servidores vier vazia da Ookla, falha graciosamente
-                raise Exception("A Ookla recusou a conexão ou não retornou servidores válidos na sua região no momento.")
+                    st = speedtest.Speedtest(secure=secure_mode)
+                    
+                    if provider.id_provider_speedtest:
+                        try:
+                            st.get_servers(servers=[int(provider.id_provider_speedtest)])
+                        except Exception:
+                            logger.warning(f"Servidor Speedtest ID {provider.id_provider_speedtest} falhou com secure={secure_mode}. Tentando fallback global.")
+                            st.get_servers()
+                    else:
+                        st.get_servers()
+                        
+                    # É nesta linha que o bug (IndexError) da biblioteca ocorre.
+                    # Vamos contê-lo especificamente.
+                    st.get_best_server()
+                    best_server_found = True
+                    break # Sucesso absoluto! Quebra o loop.
+                    
+                except IndexError:
+                    # Captura especificamente o BUG da biblioteca speedtest-cli
+                    logger.debug(f"Bug IndexError do speedtest-cli detectado com secure={secure_mode}. Tentando protocolo alternativo.")
+                    continue
+                except speedtest.SpeedtestBestServerFailure:
+                    logger.debug(f"Falha ao obter melhor servidor com secure={secure_mode}. Tentando protocolo alternativo.")
+                    continue
+                except Exception as e:
+                    logger.debug(f"Erro na conexão Ookla com secure={secure_mode}: {e}")
+                    continue
 
+            if not best_server_found or st is None:
+                raise Exception("A Ookla bloqueou a conexão ou todos os pings de latência falharam (possível rate-limit no seu IP).")
+
+            # Executa o teste de fato
             st.download()
             st.upload()
             test_results = st.results.dict()
@@ -230,19 +244,16 @@ class InternetCheck(metaclass=SingletonMeta):
             result_data['test_result'] = test_results
 
             if test_results.get('download'):
-                result_data['download_speed_mbps'] = round(
-                    test_results['download'] / 1_000_000, 2)
+                result_data['download_speed_mbps'] = round(test_results['download'] / 1_000_000, 2)
 
             if test_results.get('upload'):
-                result_data['upload_speed_mbps'] = round(
-                    test_results['upload'] / 1_000_000, 2)
+                result_data['upload_speed_mbps'] = round(test_results['upload'] / 1_000_000, 2)
 
             if test_results.get('ping'):
                 result_data['latency_ms'] = round(test_results['ping'], 2)
 
         except Exception as ex:
-            log_error(
-                logger, f"Erro executando speedtest para o provider {provider.name}.", ex)
+            log_error(logger, f"Erro executando speedtest para o provider {provider.name}.", ex)
             result_data['exception'] = str(ex)
 
         return result_data
@@ -250,11 +261,9 @@ class InternetCheck(metaclass=SingletonMeta):
     def check_single_status(self, provider: InternetProvider):
         status, ping_results = self._ping(provider)
         if not self._save_ping_results(provider, ping_results, status):
-            logger.error(
-                f"Erro salvando resultado do ping para provider {provider.name}.")
+            logger.error(f"Erro salvando resultado do ping para provider {provider.name}.")
 
     def check_single_speed(self, provider: InternetProvider):
         speed_results = self._speedtest(provider)
         if not self._save_speed_results(provider, speed_results):
-            logger.error(
-                f"Erro salvando resultado do speedtest para provider {provider.name}.")
+            logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")
