@@ -1,8 +1,10 @@
 import logging
+
 from django.conf import settings
 from mailersend import MailerSendClient
 
 from .models import InternetProvider, ConnectionSpeed, ConnectionStatus, StatusChoices
+
 
 logger = logging.getLogger(__name__)
 

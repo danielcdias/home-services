@@ -212,7 +212,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # --- Configurações MailerSend
 MAILERSEND_API_KEY = env('MAILERSEND_API_KEY', default='')
 SENDER_EMAIL = env('MAILERSEND_SENDER_EMAIL',
-                   default='noreplay@danieldias.dev.br')
+                   default='no-replay@danieldias.dev.br')
 SENDER_NAME = env(
     'SENDER_NAME', default='Monitor de Rede - Casa Dani & Stephie')
 
