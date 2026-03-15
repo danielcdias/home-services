@@ -4,9 +4,11 @@ import requests
 import subprocess
 import json
 import os
+import shlex
 
 from typing import Tuple
 
+from django.conf import settings
 from core.util import SingletonMeta, log_error
 from internet_status.models import InternetProvider, HostsToPing, ConnectionStatus, ConnectionSpeed, StatusChoices
 
@@ -20,22 +22,19 @@ class InternetCheck(metaclass=SingletonMeta):
         for provider in providers:
             status, ping_results = self._ping(provider)
             if not self._save_ping_results(provider, ping_results, status):
-                logger.error(
-                    f"Erro salvando resultado do ping para provider {provider.name}.")
+                logger.error(f"Erro salvando resultado do ping para provider {provider.name}.")
 
     def check_internet_speed(self):
         providers: list[InternetProvider] = self._get_hosts()
         for provider in providers:
-            speed_results = self._speedtest(provider)
+            speed_results = self._speedtest_official_cli(provider)
             if not self._save_speed_results(provider, speed_results):
-                logger.error(
-                    f"Erro salvando resultado do speedtest para provider {provider.name}.")
+                logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")
 
     def _get_hosts(self) -> list[InternetProvider]:
         result: list[InternetProvider] = []
         try:
-            result = InternetProvider.objects.filter(
-                enabled=True).prefetch_related('hosts_to_ping')
+            result = InternetProvider.objects.filter(enabled=True).prefetch_related('hosts_to_ping')
         except Exception as ex:
             log_error(logger, "Erro obtendo providers de internet.", ex)
         return result
@@ -55,10 +54,7 @@ class InternetCheck(metaclass=SingletonMeta):
 
     def _ping(self, provider: InternetProvider) -> Tuple[StatusChoices, dict]:
         result_status: StatusChoices = StatusChoices.UNKNOWN
-        result_data: dict = {
-            'tests_results': [],
-            'thresholds': {}
-        }
+        result_data: dict = {'tests_results': [], 'thresholds': {}}
         
         hosts_to_test = HostsToPing.objects.filter(provider=provider, enabled=True)
         
@@ -81,8 +77,9 @@ class InternetCheck(metaclass=SingletonMeta):
             if host.check_type == 'HTTP':
                 http_total += 1
                 try:
-                    # Timeout curto de 3s. Queremos apenas o cabeçalho 204
-                    response = requests.get(host.hostname_or_ipaddress, timeout=3)
+                    import urllib3
+                    urllib3.disable_warnings()
+                    response = requests.get(host.hostname_or_ipaddress, timeout=3, verify=False)
                     if response.status_code == 204:
                         result['success'] = True
                         result['result'] = response.elapsed.total_seconds() * 1000
@@ -109,7 +106,6 @@ class InternetCheck(metaclass=SingletonMeta):
                     
             result_data['tests_results'].append(result)
 
-        # === CÁLCULO DAS MÉTRICAS ===
         total_hosts = http_total + icmp_total
         icmp_loss_pct = 0.0
         avg_icmp_latency = 0.0
@@ -134,8 +130,6 @@ class InternetCheck(metaclass=SingletonMeta):
             },
             'reason': ''
         }
-
-        # === MATRIZ DE DECISÃO ===
         
         if total_hosts < provider.minimum_hosts_to_ping:
             result_status = StatusChoices.UNKNOWN
@@ -179,15 +173,11 @@ class InternetCheck(metaclass=SingletonMeta):
             log_error(logger, "Erro salvando resultado do speedtest.", ex)
         return result
 
-    def _speedtest(self, provider: InternetProvider) -> dict:
-        """
-        Executa o teste de velocidade via subprocesso clonando o ambiente real.
-        """
+    def _speedtest_official_cli(self, provider: InternetProvider) -> dict:
+        """Motor Definitivo: Executa comando extraído das configurações do Django (settings.py)."""
         result_data = {
-            'download_speed_mbps': 0,
-            'upload_speed_mbps': 0,
-            'latency_ms': 0,
-            'test_result': {},
+            'download_speed_mbps': 0, 'upload_speed_mbps': 0, 'latency_ms': 0,
+            'test_result': {}, 'exception': None,
             'thresholds': {
                 'provider_config': {
                     'download_speed_minimum_threshold': provider.download_speed_minimum_threshold,
@@ -195,77 +185,78 @@ class InternetCheck(metaclass=SingletonMeta):
                     'upload_speed_minimum_threshold': provider.upload_speed_minimum_threshold,
                     'upload_speed_expected_threshold': provider.upload_speed_expected_threshold,
                 }
-            },
-            'exception': None,
+            }
         }
 
         try:
-            base_cmd = "speedtest --json"
-            cmd = base_cmd
+            logger.info("Iniciando Speedtest: CLI gerido via Django Settings...")
             
-            if provider.id_provider_speedtest:
-                cmd += f" --server {int(provider.id_provider_speedtest)}"
+            # Obtém a string de comando configurada no settings.py
+            # Usa getattr para prever um fallback caso a variável falte no ambiente
+            cmd_string = getattr(settings, 'OOKLA_CLI_COMMAND', 'speedtest --accept-license --accept-gdpr -f json')
             
-            # Copia 100% das variáveis do seu Windows/venv atual para dentro do subprocesso
-            current_env = os.environ.copy()
+            # O parâmetro posix=(os.name != 'nt') é vital. 
+            # Ele impede que o shlex engula barras invertidas (\) em caminhos no Windows.
+            cmd = shlex.split(cmd_string, posix=(os.name != 'nt'))
             
-            # shell=True abre um interpretador real do sistema operativo
-            process = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=90, env=current_env)
-            
-            if process.returncode != 0 and provider.id_provider_speedtest:
-                logger.warning(f"Falha ao usar o servidor {provider.id_provider_speedtest} via CLI. Tentando fallback global.")
-                process = subprocess.run(base_cmd, shell=True, capture_output=True, text=True, timeout=90, env=current_env)
+            try:
+                process = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+            except FileNotFoundError:
+                raise Exception(f"Binário não encontrado. Verifique se o caminho na variável OOKLA_CLI_COMMAND em settings.py está correto: {cmd_string}")
+
+            raw_out = process.stdout.strip()
+            raw_err = process.stderr.strip()
 
             if process.returncode != 0:
-                # Limpa os DeprecationWarnings do Python 3.12+ do log de erro para fácil leitura
-                stderr_clean = "\n".join([line for line in process.stderr.splitlines() if 'DeprecationWarning' not in line and '.py:' not in line]).strip()
-                error_msg = stderr_clean or process.stdout.strip() or "Erro desconhecido na CLI"
-                raise Exception(f"Erro na execução via terminal: {error_msg}")
+                raise Exception(f"O CLI nativo falhou (Código {process.returncode}). STDERR: '{raw_err}' | STDOUT: '{raw_out}'")
 
-            out_text = process.stdout
+            if not raw_out:
+                raise Exception(f"O comando rodou, mas retornou vazio. STDERR: '{raw_err}'")
+
+            try:
+                data = json.loads(raw_out)
+            except json.JSONDecodeError:
+                raise Exception(f"Falha ao interpretar JSON. Saída bruta: '{raw_out[:200]}'")
+
+            if isinstance(data, dict) and "error" in data:
+                raise Exception(f"Erro interno do Ookla CLI: {data.get('error')}")
+
+            # Conversão: Bytes/s para Mbps
+            dl_bytes_sec = data.get('download', {}).get('bandwidth', 0)
+            ul_bytes_sec = data.get('upload', {}).get('bandwidth', 0)
+            ping_ms = data.get('ping', {}).get('latency', 0)
+
+            result_data['download_speed_mbps'] = round((dl_bytes_sec * 8) / 1000000, 2)
+            result_data['upload_speed_mbps'] = round((ul_bytes_sec * 8) / 1000000, 2)
+            result_data['latency_ms'] = round(ping_ms, 2)
             
-            # Extração cirúrgica do JSON ignorando possíveis Warnings impressos antes
-            idx_start = out_text.find('{')
-            idx_end = out_text.rfind('}') + 1
+            result_data['test_result'] = {
+                'client': {
+                    'ip': data.get('interface', {}).get('externalIp', 'Auto'),
+                    'isp': data.get('isp', 'Local ISP')
+                },
+                'server': {
+                    'name': data.get('server', {}).get('name', 'Nó Ookla'),
+                    'sponsor': data.get('server', {}).get('location', 'Servidor'),
+                    'country': data.get('server', {}).get('country', 'Global')
+                }
+            }
             
-            if idx_start == -1 or idx_end == 0:
-                raise ValueError(f"JSON não encontrado na saída do terminal: {out_text}")
-                
-            test_results = json.loads(out_text[idx_start:idx_end])
+            logger.info(f"Speedtest Oficial Concluído: {result_data['download_speed_mbps']} Mbps ↓ / {result_data['upload_speed_mbps']} Mbps ↑")
 
-            result_data['test_result'] = test_results
-
-            if test_results.get('download'):
-                result_data['download_speed_mbps'] = round(test_results['download'] / 1_000_000, 2)
-
-            if test_results.get('upload'):
-                result_data['upload_speed_mbps'] = round(test_results['upload'] / 1_000_000, 2)
-
-            if test_results.get('ping'):
-                result_data['latency_ms'] = round(test_results['ping'], 2)
-
-        except subprocess.TimeoutExpired:
-            error_msg = "Timeout: O teste de velocidade via terminal excedeu o tempo limite de 90 segundos."
-            log_error(logger, error_msg, None)
+        except Exception as e:
+            error_msg = f"Falha no Speedtest Oficial Nativo: {e}"
+            log_error(logger, error_msg, e)
             result_data['exception'] = error_msg
-        except json.JSONDecodeError as ex:
-            error_msg = f"Erro ao interpretar saída da CLI do Speedtest: {process.stdout.strip()}"
-            log_error(logger, error_msg, ex)
-            result_data['exception'] = error_msg
-        except Exception as ex:
-            log_error(logger, f"Erro executando speedtest CLI para o provider {provider.name}.", ex)
-            result_data['exception'] = str(ex)
-
+            
         return result_data
 
     def check_single_status(self, provider: InternetProvider):
         status, ping_results = self._ping(provider)
         if not self._save_ping_results(provider, ping_results, status):
-            logger.error(
-                f"Erro salvando resultado do ping para provider {provider.name}.")
+            logger.error(f"Erro salvando resultado do ping para provider {provider.name}.")
 
     def check_single_speed(self, provider: InternetProvider):
-        speed_results = self._speedtest(provider)
+        speed_results = self._speedtest_official_cli(provider)
         if not self._save_speed_results(provider, speed_results):
-            logger.error(
-                f"Erro salvando resultado do speedtest para provider {provider.name}.")
+            logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")

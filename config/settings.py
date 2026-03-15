@@ -220,3 +220,7 @@ SENDER_NAME = env(
 LOGIN_URL = 'two_factor:login'
 # Redireciona para o dashboard após o login com sucesso
 LOGIN_REDIRECT_URL = 'core:dashboard'
+
+
+# Comando cliente Speedtest da Ookla
+OOKLA_CLI_COMMAND = env('OOKLA_CLI_COMMAND', default='erro')
