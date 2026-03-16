@@ -17,7 +17,9 @@ WORKDIR $APP_HOME
 
 RUN apt update && \
     apt upgrade -y && \
-    apt install -y speedtest-cli iputils-ping curl && \
+    apt install -y iputils-ping curl && \
+    curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash && \
+    apt install speedtest && \
     rm -rf /var/lib/apt/lists/* && \
     apt autoclean && \
     apt autoremove
