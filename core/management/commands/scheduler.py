@@ -1,15 +1,14 @@
 import json
-import schedule
 import time
 import threading
+
 from pathlib import Path
 from datetime import datetime
-
 from croniter import croniter
-
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import import_string
+
 from internet_status.models import InternetProvider
 
 def run_threaded(job_func, *args, **kwargs):
@@ -24,91 +23,97 @@ class Command(BaseCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cron_tasks = []  # Lista para armazenar as tarefas CRON ativas
+        self.cron_tasks = []
 
     def load_tasks(self):
-        """Limpa a agenda atual e recarrega do JSON e do Banco de Dados."""
-        schedule.clear()
+        """Limpa a agenda atual e recarrega do JSON e do Banco de Dados usando CRON."""
         self.cron_tasks.clear()
         self.stdout.write(self.style.WARNING("Limpando agendamentos antigos..."))
 
         json_path = Path(settings.BASE_DIR) / 'scheduled-tasks.json'
+        now = datetime.now()
 
         # --- 1. CARGA ESTÁTICA (JSON) ---
+        self.stdout.write(self.style.SUCCESS("Carregando tarefas estáticas (JSON)..."))
         if json_path.exists():
-            with open(json_path, 'r', encoding='utf-8') as f:
-                tasks_config = json.load(f)
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    tasks = json.load(f)
+                    for task in tasks:
+                        try:
+                            job_func = import_string(task['task'])
+                            cron_expr = task['schedule']
+                            
+                            self.cron_tasks.append({
+                                'name': task['name'],
+                                'cron_obj': croniter(cron_expr, now),
+                                'next_run': croniter(cron_expr, now).get_next(datetime),
+                                'last_run_minute': None, # Controle de duplicidade
+                                'func': job_func,
+                                'args': [],
+                                'kwargs': {},
+                                'source': 'JSON'
+                            })
+                            self.stdout.write(f" -> [JSON] {task['name']} (CRON: {cron_expr})")
+                        except Exception as e:
+                            self.stdout.write(self.style.ERROR(f"Falha ao importar tarefa JSON '{task.get('name')}': {e}"))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Erro ao ler scheduled-tasks.json: {e}"))
 
-            self.stdout.write(self.style.SUCCESS("Carregando tarefas estáticas (JSON)..."))
-            for config in tasks_config:
-                task_path = config.get('task')
-                try:
-                    task_func = import_string(task_path)
-                except ImportError:
-                    self.stdout.write(self.style.ERROR(f"Falha ao importar a tarefa: {task_path}"))
-                    continue
-
-                sched_type = config.get('type')
-                if sched_type == 'interval':
-                    value = config.get('value')
-                    unit = config.get('unit')
-
-                    if unit == 'minutes':
-                        schedule.every(value).minutes.do(run_threaded, task_func)
-                    elif unit == 'hours':
-                        schedule.every(value).hours.do(run_threaded, task_func)
-                    self.stdout.write(f" -> [JSON] {task_path} (A cada {value} {unit} - background)")
-
-                elif sched_type == 'daily':
-                    run_time = config.get('time')
-                    schedule.every().day.at(run_time).do(run_threaded, task_func)
-                    self.stdout.write(f" -> [JSON] {task_path} (Diariamente às {run_time} - background)")
-
-        # --- 2. CARGA DINÂMICA (BASE DE DADOS - CRON) ---
+        # --- 2. CARGA DINÂMICA (BANCO DE DADOS) ---
         self.stdout.write(self.style.SUCCESS("Carregando tarefas dinâmicas (Base de Dados com CRON)..."))
         try:
-            ping_task = import_string('internet_status.tasks.check_internet_status')
-            speed_task = import_string('internet_status.tasks.check_internet_speed')
-
             providers = InternetProvider.objects.filter(enabled=True)
-            now = datetime.now()
-            
             for provider in providers:
-                # Carregar tarefa de Ping
-                if provider.status_check_interval and croniter.is_valid(provider.status_check_interval):
-                    cron_obj = croniter(provider.status_check_interval, now)
-                    self.cron_tasks.append({
-                        'func': ping_task,
-                        'kwargs': {'provider_id': provider.id},
-                        'cron_obj': cron_obj,
-                        'next_run': cron_obj.get_next(datetime)
-                    })
-                    self.stdout.write(f" -> [BD] Ping p/ '{provider.name}' (CRON: {provider.status_check_interval})")
+                # Status Check
+                self.cron_tasks.append({
+                    'name': f"Ping p/ '{provider.name}'",
+                    'cron_obj': croniter(provider.status_check_interval, now),
+                    'next_run': croniter(provider.status_check_interval, now).get_next(datetime),
+                    'last_run_minute': None,
+                    'func': import_string('internet_status.tasks.check_internet_status'),
+                    'args': [provider.id],
+                    'kwargs': {},
+                    'source': 'BD'
+                })
+                self.stdout.write(f" -> [BD] Ping p/ '{provider.name}' (CRON: {provider.status_check_interval})")
 
-                # Carregar tarefa de Speedtest
-                if provider.speed_test_interval and croniter.is_valid(provider.speed_test_interval):
-                    cron_obj = croniter(provider.speed_test_interval, now)
-                    self.cron_tasks.append({
-                        'func': speed_task,
-                        'kwargs': {'provider_id': provider.id},
-                        'cron_obj': cron_obj,
-                        'next_run': cron_obj.get_next(datetime)
-                    })
-                    self.stdout.write(f" -> [BD] Speedtest p/ '{provider.name}' (CRON: {provider.speed_test_interval})")
-                    
-        except Exception as ex:
-            self.stdout.write(self.style.ERROR(f"Erro ao carregar da base de dados: {ex}"))
+                # Speed Test
+                self.cron_tasks.append({
+                    'name': f"Speedtest p/ '{provider.name}'",
+                    'cron_obj': croniter(provider.speed_test_interval, now),
+                    'next_run': croniter(provider.speed_test_interval, now).get_next(datetime),
+                    'last_run_minute': None,
+                    'func': import_string('internet_status.tasks.check_internet_speed'),
+                    'args': [provider.id],
+                    'kwargs': {},
+                    'source': 'BD'
+                })
+                self.stdout.write(f" -> [BD] Speedtest p/ '{provider.name}' (CRON: {provider.speed_test_interval})")
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Erro ao carregar tarefas do banco: {e}"))
 
     def run_cron_tasks(self):
-        """Avalia e executa as tarefas baseadas em expressões CRON."""
+        """Verifica quais tarefas CRON devem ser executadas agora."""
         now = datetime.now()
+        current_minute = now.replace(second=0, microsecond=0)
+
         for task in self.cron_tasks:
-            if now >= task['next_run']:
-                run_threaded(task['func'], **task['kwargs'])
-                # Atualiza a data da próxima execução
+            # Só executa se:
+            # 1. O tempo atual passou ou igualou o next_run
+            # 2. O minuto atual é diferente do minuto da última execução (impede duplicata no mesmo minuto)
+            if now >= task['next_run'] and current_minute != task['last_run_minute']:
+                
+                # Registra a execução no minuto atual
+                task['last_run_minute'] = current_minute
+                # Calcula a próxima execução baseada no tempo de agora
                 task['next_run'] = task['cron_obj'].get_next(datetime)
+                
+                self.stdout.write(self.style.NOTICE(f"Executando: {task['name']} [{task['source']}]"))
+                run_threaded(task['func'], *task['args'], **task['kwargs'])
 
     def handle(self, *args, **options):
+        # ... (mantenha a lógica do heartbeat e flag de reload idêntica)
         heartbeat_file = Path(settings.BASE_DIR) / 'scheduler_heartbeat.lock' if getattr(
             settings, 'LOCAL_DEV_ENV', False) else Path('/tmp/scheduler_heartbeat.lock')
         shared_dir = Path(settings.BASE_DIR) / 'shared'
@@ -131,12 +136,13 @@ class Command(BaseCommand):
                     reload_flag.unlink()
                     self.load_tasks()
 
-                # Avalia as tarefas estáticas
-                schedule.run_pending()
-                # Avalia as nossas novas tarefas dinâmicas CRON
                 self.run_cron_tasks()
 
-                heartbeat_file.touch(exist_ok=True)
-                time.sleep(2)
+                with open(heartbeat_file, 'w') as f:
+                    f.write(datetime.now().isoformat())
+                
+                time.sleep(1)
         except KeyboardInterrupt:
-            self.stdout.write(self.style.WARNING("\nAgendador encerrado."))
+            self.stdout.write(self.style.WARNING("\nAgendador parado pelo usuário."))
+            if heartbeat_file.exists():
+                heartbeat_file.unlink()

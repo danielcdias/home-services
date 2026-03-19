@@ -200,3 +200,46 @@ class ConnectionSpeed(models.Model):
         except (KeyError, TypeError, ValueError):
             return None
         return None
+
+
+class DailyStatusSummary(models.Model):
+    """
+    Armazena o resumo diário de conectividade com a distribuição de todos os status.
+    """
+    provider = models.ForeignKey(
+        InternetProvider, on_delete=models.CASCADE, related_name='daily_status_summaries')
+    date = models.DateField(db_index=True)
+    total_checks = models.IntegerField(help_text="Total de verificações realizadas no dia")
+    
+    connected_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Percentual de status CONNECTED")
+    unstable_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Percentual de status UNSTABLE")
+    disconnected_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Percentual de status DISCONNECTED")
+    unknown_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Percentual de status UNKNOWN")
+
+    class Meta:
+        unique_together = ('provider', 'date')
+        verbose_name = "Resumo Diário de Status"
+        verbose_name_plural = "Resumos Diários de Status"
+
+    def __str__(self):
+        return f"{self.provider.name} - {self.date} (Conectado: {self.connected_pct}%)"
+
+
+class DailySpeedSummary(models.Model):
+    """
+    Armazena o resumo diário de velocidades para fins de histórico de longo prazo.
+    """
+    provider = models.ForeignKey(
+        InternetProvider, on_delete=models.CASCADE, related_name='daily_speed_summaries')
+    date = models.DateField(db_index=True)
+    avg_download = models.FloatField(help_text="Média de download (Mbps) do dia")
+    avg_upload = models.FloatField(help_text="Média de upload (Mbps) do dia")
+    avg_latency = models.FloatField(help_text="Média de latência (ms) do dia")
+
+    class Meta:
+        unique_together = ('provider', 'date')
+        verbose_name = "Resumo Diário de Velocidade"
+        verbose_name_plural = "Resumos Diários de Velocidade"
+
+    def __str__(self):
+        return f"{self.provider.name} - {self.date}: {self.avg_download} Mbps"

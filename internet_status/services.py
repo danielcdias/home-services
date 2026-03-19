@@ -7,10 +7,18 @@ import os
 import shlex
 
 from typing import Tuple
+from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
+from django.db.models import Avg, Count, Q
+from django.utils import timezone
+
 from core.util import SingletonMeta, log_error
-from internet_status.models import InternetProvider, HostsToPing, ConnectionStatus, ConnectionSpeed, StatusChoices
+from internet_status.models import (
+    InternetProvider, HostsToPing, ConnectionStatus, ConnectionSpeed, StatusChoices,
+    DailyStatusSummary, DailySpeedSummary
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,199 +44,112 @@ class InternetCheck(metaclass=SingletonMeta):
         try:
             result = InternetProvider.objects.filter(enabled=True).prefetch_related('hosts_to_ping')
         except Exception as ex:
-            log_error(logger, "Erro obtendo providers de internet.", ex)
+            log_error(logger, "Erro ao buscar hosts para ping.", ex)
         return result
 
-    def _save_ping_results(self, provider: InternetProvider, ping_results: dict, status: str) -> bool:
-        result: bool = False
+    def _ping(self, provider: InternetProvider) -> Tuple[str, dict]:
+        hosts: list[HostsToPing] = provider.hosts_to_ping.filter(enabled=True)
+        results = {'success': [], 'error': []}
+        
+        for host in hosts:
+            try:
+                # ping3.ping returns delay in seconds or None/False on failure
+                delay = ping3.ping(host.hostname_or_ipaddress, timeout=2)
+                if delay:
+                    results['success'].append({
+                        'host': host.hostname_or_ipaddress,
+                        'name': host.name,
+                        'delay': round(delay * 1000, 2)
+                    })
+                else:
+                    results['error'].append({
+                        'host': host.hostname_or_ipaddress,
+                        'name': host.name,
+                        'reason': 'timeout'
+                    })
+            except Exception as e:
+                results['error'].append({
+                    'host': host.hostname_or_ipaddress,
+                    'name': host.name,
+                    'reason': str(e)
+                })
+
+        total_hosts = len(hosts)
+        if total_hosts == 0:
+            return StatusChoices.UNKNOWN, results
+
+        error_count = len(results['error'])
+        error_percentage = error_count / total_hosts
+
+        if error_percentage >= float(provider.status_ping_error_disconnected_threshold):
+            status = StatusChoices.DISCONNECTED
+        elif error_percentage >= float(provider.status_ping_error_unstable_threshold):
+            status = StatusChoices.UNSTABLE
+        else:
+            status = StatusChoices.CONNECTED
+
+        return status, results
+
+    def _save_ping_results(self, provider: InternetProvider, results: dict, status: str) -> bool:
         try:
             ConnectionStatus.objects.create(
                 provider=provider,
                 status=status,
-                ping_results=ping_results
+                ping_results=results
             )
-            result = True
+            return True
         except Exception as ex:
-            log_error(logger, "Erro salvando resultado do ping.", ex)
-        return result
+            log_error(logger, "Erro ao salvar resultados do ping.", ex)
+            return False
 
-    def _ping(self, provider: InternetProvider) -> Tuple[StatusChoices, dict]:
-        result_status: StatusChoices = StatusChoices.UNKNOWN
-        result_data: dict = {'tests_results': [], 'thresholds': {}}
-        
-        hosts_to_test = HostsToPing.objects.filter(provider=provider, enabled=True)
-        
-        http_total = 0
-        http_success = 0
-        icmp_total = 0
-        icmp_success = 0
-        total_icmp_latency = 0.0
-
-        for host in hosts_to_test:
-            result = {
-                'name': host.name,
-                'hostname_or_ipaddress': host.hostname_or_ipaddress,
-                'check_type': host.check_type,
-                'result': 0, 
-                'success': False,
-                'exception': None,
-            }
-
-            if host.check_type == 'HTTP':
-                http_total += 1
-                try:
-                    import urllib3
-                    urllib3.disable_warnings()
-                    response = requests.get(host.hostname_or_ipaddress, timeout=3, verify=False)
-                    if response.status_code == 204:
-                        result['success'] = True
-                        result['result'] = response.elapsed.total_seconds() * 1000
-                        http_success += 1
-                    else:
-                        result['exception'] = f"Status inesperado: {response.status_code}"
-                except requests.exceptions.RequestException as ex:
-                    result['exception'] = str(ex)
-
-            elif host.check_type == 'ICMP':
-                icmp_total += 1
-                try:
-                    ping_result = ping3.ping(host.hostname_or_ipaddress, timeout=2)
-                    if ping_result is not False and ping_result is not None:
-                        result['success'] = True
-                        result['result'] = ping_result * 1000 
-                        icmp_success += 1
-                        total_icmp_latency += result['result']
-                    else:
-                        result['exception'] = "Timeout"
-                except Exception as ex:
-                    log_error(logger, "Erro executando ping ICMP.", ex)
-                    result['exception'] = str(ex)
-                    
-            result_data['tests_results'].append(result)
-
-        total_hosts = http_total + icmp_total
-        icmp_loss_pct = 0.0
-        avg_icmp_latency = 0.0
-        
-        if icmp_total > 0:
-            icmp_loss_pct = ((icmp_total - icmp_success) / icmp_total) * 100
-            if icmp_success > 0:
-                avg_icmp_latency = total_icmp_latency / icmp_success
-
-        result_data['thresholds'] = {
-            'provider_config': {
-                'minimum_hosts_to_ping': provider.minimum_hosts_to_ping,
-                'unstable_packet_loss_threshold': float(provider.unstable_packet_loss_threshold),
-                'unstable_latency_threshold': float(provider.unstable_latency_threshold),
-            },
-            'calculation': {
-                'http_total': http_total,
-                'http_success': http_success,
-                'icmp_total': icmp_total,
-                'icmp_loss_pct': round(icmp_loss_pct, 2),
-                'avg_icmp_latency': round(avg_icmp_latency, 2),
-            },
-            'reason': ''
-        }
-        
-        if total_hosts < provider.minimum_hosts_to_ping:
-            result_status = StatusChoices.UNKNOWN
-            result_data['thresholds']['reason'] = f"Apenas {total_hosts} hosts configurados. Mínimo exigido: {provider.minimum_hosts_to_ping}."
-            return result_status, result_data
-
-        if http_total > 0 and http_success == 0:
-            result_status = StatusChoices.DISCONNECTED
-            result_data['thresholds']['reason'] = "FALHA CRÍTICA: Nenhum teste HTTP 204 obteve sucesso. Possível falha de DNS ou bloqueio na camada 7."
-            return result_status, result_data
-            
-        if http_total == 0 and icmp_total > 0 and icmp_success == 0:
-            result_status = StatusChoices.DISCONNECTED
-            result_data['thresholds']['reason'] = "FALHA CRÍTICA: 100% de perda de pacotes ICMP (Nenhum teste HTTP configurado)."
-            return result_status, result_data
-
-        if icmp_loss_pct >= provider.unstable_packet_loss_threshold:
-            result_status = StatusChoices.UNSTABLE
-            result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Perda de pacotes ICMP ({icmp_loss_pct:.1f}%) ultrapassou o limite ({provider.unstable_packet_loss_threshold}%)."
-        elif avg_icmp_latency >= provider.unstable_latency_threshold:
-            result_status = StatusChoices.UNSTABLE
-            result_data['thresholds']['reason'] = f"DEGRADAÇÃO: Latência média ICMP ({avg_icmp_latency:.1f}ms) ultrapassou o limite ({provider.unstable_latency_threshold}ms)."
-        else:
-            result_status = StatusChoices.CONNECTED
-            result_data['thresholds']['reason'] = "NORMAL: Conectividade validada com sucesso na Camada 7 e limites de ICMP normais."
-
-        return result_status, result_data
-
-    def _save_speed_results(self, provider: InternetProvider, speed_results: dict) -> bool:
-        result: bool = False
+    def _save_speed_results(self, provider: InternetProvider, results: dict) -> bool:
         try:
+            if 'exception' in results:
+                return False
+                
             ConnectionSpeed.objects.create(
                 provider=provider,
-                download_speed=speed_results.get('download_speed_mbps', 0),
-                upload_speed=speed_results.get('upload_speed_mbps', 0),
-                latency=speed_results.get('latency_ms', 0),
-                full_results=speed_results
+                download_speed=results['download_speed_mbps'],
+                upload_speed=results['upload_speed_mbps'],
+                latency=results['latency_ms'],
+                full_results=results
             )
-            result = True
+            return True
         except Exception as ex:
-            log_error(logger, "Erro salvando resultado do speedtest.", ex)
-        return result
+            log_error(logger, "Erro ao salvar resultados do speedtest.", ex)
+            return False
 
     def _speedtest_official_cli(self, provider: InternetProvider) -> dict:
-        """Motor Definitivo: Executa comando extraído das configurações do Django (settings.py)."""
+        """
+        Executa o speedtest-cli oficial da Ookla e retorna um dicionário com os resultados.
+        Exige que o binário 'speedtest' esteja instalado no PATH.
+        """
         result_data = {
-            'download_speed_mbps': 0, 'upload_speed_mbps': 0, 'latency_ms': 0,
-            'test_result': {}, 'exception': None,
-            'thresholds': {
-                'provider_config': {
-                    'download_speed_minimum_threshold': provider.download_speed_minimum_threshold,
-                    'download_speed_expected_threshold': provider.download_speed_expected_threshold,
-                    'upload_speed_minimum_threshold': provider.upload_speed_minimum_threshold,
-                    'upload_speed_expected_threshold': provider.upload_speed_expected_threshold,
-                }
-            }
+            'download_speed_mbps': 0.0,
+            'upload_speed_mbps': 0.0,
+            'latency_ms': 0.0,
+            'test_result': {}
         }
 
         try:
-            logger.info("Iniciando Speedtest: CLI gerido via Django Settings...")
+            # Comando base: speedtest --format=json --accept-license --accept-gdpr
+            cmd = ["speedtest", "--format=json", "--accept-license", "--accept-gdpr"]
             
-            # Obtém a string de comando configurada no settings.py
-            # Usa getattr para prever um fallback caso a variável falte no ambiente
-            cmd_string = getattr(settings, 'OOKLA_CLI_COMMAND', 'speedtest --accept-license --accept-gdpr -f json')
+            # Se houver um ID de servidor específico configurado no provedor
+            if provider.id_provider_speedtest:
+                cmd.extend(["--server-id", str(provider.id_provider_speedtest)])
+
+            logger.info(f"Iniciando Speedtest oficial para {provider.name}...")
             
-            # O parâmetro posix=(os.name != 'nt') é vital. 
-            # Ele impede que o shlex engula barras invertidas (\) em caminhos no Windows.
-            cmd = shlex.split(cmd_string, posix=(os.name != 'nt'))
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(process.stdout)
+
+            raw_download = data.get('download', {}).get('bandwidth', 0)
+            raw_upload = data.get('upload', {}).get('bandwidth', 0)
             
-            try:
-                process = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-            except FileNotFoundError:
-                raise Exception(f"Binário não encontrado. Verifique se o caminho na variável OOKLA_CLI_COMMAND em settings.py está correto: {cmd_string}")
-
-            raw_out = process.stdout.strip()
-            raw_err = process.stderr.strip()
-
-            if process.returncode != 0:
-                raise Exception(f"O CLI nativo falhou (Código {process.returncode}). STDERR: '{raw_err}' | STDOUT: '{raw_out}'")
-
-            if not raw_out:
-                raise Exception(f"O comando rodou, mas retornou vazio. STDERR: '{raw_err}'")
-
-            try:
-                data = json.loads(raw_out)
-            except json.JSONDecodeError:
-                raise Exception(f"Falha ao interpretar JSON. Saída bruta: '{raw_out[:200]}'")
-
-            if isinstance(data, dict) and "error" in data:
-                raise Exception(f"Erro interno do Ookla CLI: {data.get('error')}")
-
-            # Conversão: Bytes/s para Mbps
-            dl_bytes_sec = data.get('download', {}).get('bandwidth', 0)
-            ul_bytes_sec = data.get('upload', {}).get('bandwidth', 0)
-            ping_ms = data.get('ping', {}).get('latency', 0)
-
-            result_data['download_speed_mbps'] = round((dl_bytes_sec * 8) / 1000000, 2)
-            result_data['upload_speed_mbps'] = round((ul_bytes_sec * 8) / 1000000, 2)
-            result_data['latency_ms'] = round(ping_ms, 2)
+            result_data['download_speed_mbps'] = round((raw_download * 8) / 1_000_000, 2)
+            result_data['upload_speed_mbps'] = round((raw_upload * 8) / 1_000_000, 2)
+            result_data['latency_ms'] = data.get('ping', {}).get('latency', 0.0)
             
             result_data['test_result'] = {
                 'client': {
@@ -260,3 +181,108 @@ class InternetCheck(metaclass=SingletonMeta):
         speed_results = self._speedtest_official_cli(provider)
         if not self._save_speed_results(provider, speed_results):
             logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")
+
+
+class InternetCleanup(metaclass=SingletonMeta):
+    def run_monthly_cleanup(self):
+        """
+        Ponto de entrada para a tarefa agendada.
+        """
+        logger.info("Iniciando processo de limpeza e sumarização...")
+        
+        # Lê a variável de ambiente (padrão 2 meses caso não declarada)
+        retention_months = getattr(settings, 'DATA_CLEANUP_RETENTION_MONTHS', 2)
+        
+        today = timezone.now().date()
+        
+        # Volta N meses com base na configuração para achar a Data Limite
+        limit_date = today.replace(day=1)
+        for _ in range(retention_months):
+            limit_date = (limit_date - timedelta(days=1)).replace(day=1)
+            
+        try:
+            with transaction.atomic():
+                # Passamos o limite. Tudo MENOR que o limite será sumarizado
+                self._summarize_status(limit_date)
+                self._summarize_speed(limit_date)
+                
+                # Após sumarizar todo o passado, limpamos tudo que for MENOR que o limite
+                ConnectionStatus.objects.filter(last_checked__date__lt=limit_date).delete()
+                ConnectionSpeed.objects.filter(last_tested__date__lt=limit_date).delete()
+                
+                logger.info(f"Limpeza de dados anteriores a {limit_date.strftime('%d/%m/%Y')} concluída.")
+        except Exception as ex:
+            log_error(logger, "Erro na limpeza mensal", ex)
+            raise ex
+
+    def _summarize_status(self, limit_date):
+        # Filtra tudo mais antigo que a data limite
+        qs = ConnectionStatus.objects.filter(last_checked__date__lt=limit_date).values(
+            'provider', 'last_checked__date'
+        ).annotate(
+            total=Count('id'),
+            connected=Count('id', filter=Q(status=StatusChoices.CONNECTED)),
+            unstable=Count('id', filter=Q(status=StatusChoices.UNSTABLE)),
+            disconnected=Count('id', filter=Q(status=StatusChoices.DISCONNECTED)),
+            unknown=Count('id', filter=Q(status=StatusChoices.UNKNOWN)),
+        )
+
+        for item in qs:
+            total = item['total']
+            if total > 0:
+                conn_pct = (item['connected'] / total) * 100
+                unst_pct = (item['unstable'] / total) * 100
+                disc_pct = (item['disconnected'] / total) * 100
+                unk_pct = (item['unknown'] / total) * 100
+            else:
+                conn_pct = unst_pct = disc_pct = unk_pct = 0
+                
+            DailyStatusSummary.objects.update_or_create(
+                provider_id=item['provider'],
+                date=item['last_checked__date'],
+                defaults={
+                    'total_checks': total,
+                    'connected_pct': conn_pct,
+                    'unstable_pct': unst_pct,
+                    'disconnected_pct': disc_pct,
+                    'unknown_pct': unk_pct
+                }
+            )
+
+    def _summarize_speed(self, limit_date):
+        # Filtra tudo mais antigo que a data limite
+        qs = ConnectionSpeed.objects.filter(last_tested__date__lt=limit_date).values(
+            'provider', 'last_tested__date'
+        ).annotate(
+            avg_down=Avg('download_speed'),
+            avg_up=Avg('upload_speed'),
+            avg_lat=Avg('latency')
+        )
+
+        for item in qs:
+            DailySpeedSummary.objects.update_or_create(
+                provider_id=item['provider'],
+                date=item['last_tested__date'],
+                defaults={
+                    'avg_download': item['avg_down'],
+                    'avg_upload': item['avg_up'],
+                    'avg_latency': item['avg_lat']
+                }
+            )
+
+
+def run_internet_cleanup_task():
+    """
+    Função de atalho para o scheduler chamar a limpeza mensal.
+    """
+    import logging
+    from internet_status.services import InternetCleanup
+    
+    logger = logging.getLogger(__name__)
+    logger.info(">>> [SCHEDULER] Executando a tarefa de limpeza via atalho...")
+    
+    try:
+        InternetCleanup().run_monthly_cleanup()
+        logger.info(">>> [SCHEDULER] Tarefa de limpeza finalizada com sucesso.")
+    except Exception as e:
+        logger.error(f">>> [SCHEDULER] Falha crítica na execução da limpeza: {str(e)}")
