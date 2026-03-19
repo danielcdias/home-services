@@ -1,5 +1,6 @@
 {% extends 'core/base.html' %}
 {% load static %}
+{% load tz %}
 
 {% block title %}
   Detalhes: {{ provider.name }} | Home Services
@@ -25,7 +26,7 @@
 
       <form method="GET" class="d-flex align-items-center gap-2 m-0">
         <span class="fw-bold">Período:</span>
-        <select name="month" class="form-select auto-submit">
+        <select name="month" class="form-select auto-submit" onchange="this.form.submit()">
           {% for m in available_months %}
             {% if m.month == selected_month and m.year == selected_year %}
               <option value="{{ m.month }}" selected>{{ m.label }}</option>
@@ -88,59 +89,65 @@
       </div>
     </div>
 
-    <div class="row mb-4">
-      <div class="col-12">
-        <div class="card shadow-sm border-0">
-          <div class="card-header bg-danger text-white pt-3 pb-2">
-            <h5 class="card-title fw-bold mb-0">Instabilidades ou Quedas Registadas em {{ selected_label }}</h5>
-          </div>
-          <div class="card-body p-0">
-            <div class="table-responsive scrollable-table">
-              <table class="table table-hover table-striped mb-0 text-sm">
-                <thead class="adaptive-sticky-header position-sticky top-0 shadow-sm">
-                  <tr>
-                    <th class="px-3">Início</th>
-                    <th>Fim</th>
-                    <th>Duração</th>
-                    <th>Estado</th>
-                    <th>Motivo Diagnosticado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for event in events %}
+    {% if not is_summarized %}
+      <div class="row mb-4">
+        <div class="col-12">
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-danger text-white pt-3 pb-2">
+              <h5 class="card-title fw-bold mb-0">Instabilidades ou Quedas Registadas em {{ selected_label }}</h5>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive scrollable-table">
+                <table class="table table-hover table-striped mb-0 text-sm">
+                  <thead class="adaptive-sticky-header position-sticky top-0 shadow-sm">
                     <tr>
-                      <td class="px-3 fw-medium">{{ event.start|date:'d/m/Y H:i' }}</td>
-                      <td>{{ event.end|date:'d/m/Y H:i' }}</td>
-                      <td class="fw-bold">{{ event.duration }}</td>
-                      <td>
-                        {% if event.status == 'disconnected' %}
-                          <span class="badge bg-danger">Desconectado</span>
-                        {% elif event.status == 'unstable' %}
-                          <span class="badge text-bg-warning">Instável</span>
-                        {% else %}
-                          <span class="badge text-bg-secondary">Desconhecido</span>
-                        {% endif %}
-                      </td>
-                      <td class="text-muted small">{{ event.reason|default:'Falha geral' }}</td>
+                      <th class="px-3">Início</th>
+                      <th>Fim</th>
+                      <th>Duração</th>
+                      <th>Estado</th>
+                      <th>Motivo Diagnosticado</th>
                     </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="5" class="text-center py-4 text-muted">Sem falhas registadas neste mês! 🎉</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {% for event in events %}
+                      <tr>
+                        <td class="px-3 fw-medium">{{ event.start|date:'d/m/Y H:i' }}</td>
+                        <td>{{ event.end|date:'d/m/Y H:i' }}</td>
+                        <td class="fw-bold">{{ event.duration }}</td>
+                        <td>
+                          {% if event.status == 'disconnected' %}
+                            <span class="badge bg-danger">Desconectado</span>
+                          {% elif event.status == 'unstable' %}
+                            <span class="badge text-bg-warning">Instável</span>
+                          {% else %}
+                            <span class="badge text-bg-secondary">Desconhecido</span>
+                          {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ event.reason|default:'Falha geral' }}</td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">Sem falhas registadas neste mês! 🎉</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    {% endif %}
 
     <div class="row">
       <div class="col-md-6 mb-4">
         <div class="card shadow-sm border-0 h-100">
           <div class="card-header text-bg-dark pt-3 pb-2">
-            <h5 class="card-title fw-bold mb-0">Histórico de Velocidade (Completo)</h5>
+            <h5 class="card-title fw-bold mb-0">
+              Histórico de Velocidade (Completo){% if is_summarized %}
+                <span class="badge bg-info ms-2">Dados Sumarizados</span>
+              {% endif %}
+            </h5>
           </div>
           <div class="card-body p-0">
             <div class="table-responsive scrollable-table">
@@ -154,73 +161,117 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for speed in monthly_speeds %}
-                    <tr class="dcd-tooltip-row">
-                      <td class="small align-middle">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
+                  {% if is_summarized %}
+                    {% for speed in summaries_speed %}
+                      <tr>
+                        <td class="small align-middle">{{ speed.date|date:'d/m/Y' }} (Média Diária)</td>
 
-                      <td class="align-middle 
-                        {% if speed.download_speed >= provider.contracted_download_speed %}
-                          
-                          text-success fw-bold
+                        <td class="align-middle 
+                          {% if speed.avg_download >= provider.contracted_download_speed %}
+                            
+                            text-success fw-bold
 
-                        {% elif speed.download_speed >= provider.download_speed_minimum_threshold %}
-                          
-                          text-warning fw-bold
+                          {% elif speed.avg_download >= provider.download_speed_minimum_threshold %}
+                            
+                            text-warning fw-bold
 
-                        {% else %}
-                          
-                          text-danger fw-bold
+                          {% else %}
+                            
+                            text-danger fw-bold
 
-                        {% endif %}">{{ speed.download_speed }} Mbps</td>
+                          {% endif %}">{{ speed.avg_download|floatformat:1 }} Mbps</td>
 
-                      <td class="align-middle 
-                        {% if speed.upload_speed >= provider.contracted_upload_speed %}
-                          
-                          text-success fw-bold
+                        <td class="align-middle 
+                          {% if speed.avg_upload >= provider.contracted_upload_speed %}
+                            
+                            text-success fw-bold
 
-                        {% elif speed.upload_speed >= provider.upload_speed_minimum_threshold %}
-                          
-                          text-warning fw-bold
+                          {% elif speed.avg_upload >= provider.upload_speed_minimum_threshold %}
+                            
+                            text-warning fw-bold
 
-                        {% else %}
-                          
-                          text-danger fw-bold
+                          {% else %}
+                            
+                            text-danger fw-bold
 
-                        {% endif %}">{{ speed.upload_speed }} Mbps</td>
+                          {% endif %}">{{ speed.avg_upload|floatformat:1 }} Mbps</td>
 
-                      <td class="align-middle">{{ speed.latency }} ms</td>
+                        <td class="align-middle">{{ speed.avg_latency|floatformat:1 }} ms</td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="4" class="py-3">Sem medições sumarizadas.</td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    {% for speed in monthly_speeds %}
+                      <tr class="dcd-tooltip-row">
+                        <td class="small align-middle">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
 
-                      <td class="d-none">
-                        <div class="tooltip-content-html">
-                          {% with result=speed.full_results.test_result %}
-                            <div class="mb-1">
-                              - <strong>Provedor:</strong> {{ result.client.isp }} - {{ result.client.country }}
-                            </div>
-                            <div class="mb-1">
-                              - <strong>IP:</strong> {{ result.client.ip }}
-                            </div>
-                            <div class="mb-1">
-                              - <strong>Servidor:</strong> {{ result.server.sponsor }}
-                            </div>
-                            <div class="mb-1">
-                              - <strong>Cidade:</strong> {{ result.server.name }} - {{ result.server.country }}
-                            </div>
-                            <div class="mb-1">
-                              - <strong>Distância:</strong> {% if speed.server_distance_km %}
-                                {{ speed.server_distance_km }} km
-                              {% else %}
-                                N/D
-                              {% endif %}
-                            </div>
-                          {% endwith %}
-                        </div>
-                      </td>
-                    </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="4" class="py-3">Sem medições.</td>
-                    </tr>
-                  {% endfor %}
+                        <td class="align-middle 
+                          {% if speed.download_speed >= provider.contracted_download_speed %}
+                            
+                            text-success fw-bold
+
+                          {% elif speed.download_speed >= provider.download_speed_minimum_threshold %}
+                            
+                            text-warning fw-bold
+
+                          {% else %}
+                            
+                            text-danger fw-bold
+
+                          {% endif %}">{{ speed.download_speed }} Mbps</td>
+
+                        <td class="align-middle 
+                          {% if speed.upload_speed >= provider.contracted_upload_speed %}
+                            
+                            text-success fw-bold
+
+                          {% elif speed.upload_speed >= provider.upload_speed_minimum_threshold %}
+                            
+                            text-warning fw-bold
+
+                          {% else %}
+                            
+                            text-danger fw-bold
+
+                          {% endif %}">{{ speed.upload_speed }} Mbps</td>
+
+                        <td class="align-middle">{{ speed.latency }} ms</td>
+
+                        <td class="d-none">
+                          <div class="tooltip-content-html">
+                            {% with result=speed.full_results.test_result %}
+                              <div class="mb-1">
+                                - <strong>Provedor:</strong> {{ result.client.isp }} - {{ result.client.country }}
+                              </div>
+                              <div class="mb-1">
+                                - <strong>IP:</strong> {{ result.client.ip }}
+                              </div>
+                              <div class="mb-1">
+                                - <strong>Servidor:</strong> {{ result.server.sponsor }}
+                              </div>
+                              <div class="mb-1">
+                                - <strong>Cidade:</strong> {{ result.server.name }} - {{ result.server.country }}
+                              </div>
+                              <div class="mb-1">
+                                - <strong>Distância:</strong> {% if speed.server_distance_km %}
+                                  {{ speed.server_distance_km }} km
+                                {% else %}
+                                  N/D
+                                {% endif %}
+                              </div>
+                            {% endwith %}
+                          </div>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="4" class="py-3">Sem medições.</td>
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
                 </tbody>
               </table>
             </div>
@@ -231,7 +282,11 @@
       <div class="col-md-6 mb-4">
         <div class="card shadow-sm border-0 h-100">
           <div class="card-header text-bg-dark pt-3 pb-2">
-            <h5 class="card-title fw-bold mb-0">Histórico de Conectividade (Completo)</h5>
+            <h5 class="card-title fw-bold mb-0">
+              Histórico de Conectividade (Completo){% if is_summarized %}
+                <span class="badge bg-info ms-2">Dados Sumarizados</span>
+              {% endif %}
+            </h5>
           </div>
           <div class="card-body p-0">
             <div class="table-responsive scrollable-table">
@@ -243,62 +298,95 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for ping in monthly_pings_list %}
-                    <tr class="dcd-tooltip-row">
-                      <td class="small align-middle">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
-                      <td class="align-middle">
-                        {% if ping.status == 'connected' %}
-                          <span class="text-success fw-bold">Conectado</span>
-                        {% elif ping.status == 'unstable' %}
-                          <span class="text-warning fw-bold">Instável</span>
-                        {% elif ping.status == 'disconnected' %}
-                          <span class="text-danger fw-bold">Desconectado</span>
-                        {% else %}
-                          <span class="text-secondary fw-bold">Desconhecido</span>
-                        {% endif %}
-                      </td>
-
-                      <td class="d-none">
-                        <div class="tooltip-content-html text-start">
-                          {% if ping.ping_results.thresholds %}
-                            <div class="mb-2 pb-2 border-bottom border-secondary">
-                              <div class="fw-bold mb-1 text-info">Decisão do Sistema:</div>
-                              <div class="small mb-2">{{ ping.ping_results.thresholds.reason|default:'Motivo não registrado' }}</div>
-                              <div class="small">
-                                <strong>Métricas ICMP:</strong><br />
-                                Perda: {{ ping.ping_results.thresholds.calculation.icmp_loss_pct|floatformat:1 }}% | Latência: {{ ping.ping_results.thresholds.calculation.avg_icmp_latency|floatformat:1 }} ms
-                              </div>
+                  {% if is_summarized %}
+                    {% for ping in summaries_status %}
+                      <tr class="dcd-tooltip-row">
+                        <td class="small align-middle">{{ ping.date|date:'d/m/Y' }} (Resumo)</td>
+                        <td class="align-middle">
+                          {% if ping.connected_pct > 0 %}
+                            <span class="badge bg-success">{{ ping.connected_pct|floatformat:1 }}% Conectado</span>
+                          {% endif %}
+                          {% if ping.unstable_pct > 0 %}
+                            <span class="badge bg-warning text-dark">{{ ping.unstable_pct|floatformat:1 }}% Instável</span>
+                          {% endif %}
+                          {% if ping.disconnected_pct > 0 %}
+                            <span class="badge bg-danger">{{ ping.disconnected_pct|floatformat:1 }}% Offline</span>
+                          {% endif %}
+                        </td>
+                        <td class="d-none">
+                          <div class="tooltip-content-html text-start">
+                            <div class="mb-1 text-info">
+                              - <strong>Modo:</strong> Histórico Sumarizado
                             </div>
-                          {% endif %}
-
-                          {% if ping.ping_results.tests_results %}
-                            <div class="fw-bold mb-1 text-info">Testes Individuais:</div>
-                            {% for host in ping.ping_results.tests_results %}
-                              <div class="mb-1 small">
-                                - {{ host.name }} ({{ host.check_type }}):{% if host.success %}
-                                  <span class="text-success fw-bold">
-                                    {% if host.check_type == 'HTTP' %}
-                                      {{ host.result|floatformat:0 }} ms (204 OK)
-                                    {% else %}
-                                      {{ host.result|floatformat:1 }} ms
-                                    {% endif %}
-                                  </span>
-                                {% else %}
-                                  <span class="text-danger fw-bold">{{ host.exception|default:'Falhou'|truncatechars:20 }}</span>
-                                {% endif %}
-                              </div>
-                            {% endfor %}
+                            <div class="mb-1">
+                              - Foram feitas <strong>{{ ping.total_checks }}</strong> verificações de rede neste dia.
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="2" class="py-3">Sem pings sumarizados.</td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    {% for ping in monthly_pings_list %}
+                      <tr class="dcd-tooltip-row">
+                        <td class="small align-middle">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
+                        <td class="align-middle">
+                          {% if ping.status == 'connected' %}
+                            <span class="text-success fw-bold">Conectado</span>
+                          {% elif ping.status == 'unstable' %}
+                            <span class="text-warning fw-bold">Instável</span>
+                          {% elif ping.status == 'disconnected' %}
+                            <span class="text-danger fw-bold">Desconectado</span>
                           {% else %}
-                            <div>Sem dados detalhados.</div>
+                            <span class="text-secondary fw-bold">Desconhecido</span>
                           {% endif %}
-                        </div>
-                      </td>
-                    </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="2" class="py-3">Sem pings executados.</td>
-                    </tr>
-                  {% endfor %}
+                        </td>
+
+                        <td class="d-none">
+                          <div class="tooltip-content-html text-start">
+                            {% if ping.ping_results.thresholds %}
+                              <div class="mb-2 pb-2 border-bottom border-secondary">
+                                <div class="fw-bold mb-1 text-info">Decisão do Sistema:</div>
+                                <div class="small mb-2">{{ ping.ping_results.thresholds.reason|default:'Motivo não registrado' }}</div>
+                                <div class="small">
+                                  <strong>Métricas ICMP:</strong><br />
+                                  Perda: {{ ping.ping_results.thresholds.calculation.icmp_loss_pct|floatformat:1 }}% | Latência: {{ ping.ping_results.thresholds.calculation.avg_icmp_latency|floatformat:1 }} ms
+                                </div>
+                              </div>
+                            {% endif %}
+
+                            {% if ping.ping_results.tests_results %}
+                              <div class="fw-bold mb-1 text-info">Testes Individuais:</div>
+                              {% for host in ping.ping_results.tests_results %}
+                                <div class="mb-1 small">
+                                  - {{ host.name }} ({{ host.check_type }}):{% if host.success %}
+                                    <span class="text-success fw-bold">
+                                      {% if host.check_type == 'HTTP' %}
+                                        {{ host.result|floatformat:0 }} ms (204 OK)
+                                      {% else %}
+                                        {{ host.result|floatformat:1 }} ms
+                                      {% endif %}
+                                    </span>
+                                  {% else %}
+                                    <span class="text-danger fw-bold">{{ host.exception|default:'Falhou'|truncatechars:20 }}</span>
+                                  {% endif %}
+                                </div>
+                              {% endfor %}
+                            {% else %}
+                              <div>Sem dados detalhados.</div>
+                            {% endif %}
+                          </div>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="2" class="py-3">Sem pings executados.</td>
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
                 </tbody>
               </table>
             </div>

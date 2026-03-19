@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from internet_status import views
 
 
 app_name = 'internet_status'

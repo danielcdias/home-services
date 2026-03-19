@@ -1,0 +1,7 @@
+[
+    {
+        "name": "Limpeza Mensal e Sumarização de Dados",
+        "schedule": "0 2 1 * *",
+        "task": "internet_status.services.run_internet_cleanup_task"
+    }
+]

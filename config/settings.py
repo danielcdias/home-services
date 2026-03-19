@@ -91,7 +91,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 if LOCAL_DEV_ENV:
     DATABASES = {
-        'default': env.db_url_config('sqlite:///db.sqlite3')
+        'default': env.db_url_config('sqlite:///db.sqlite3?timeout=20')
     }
 else:
     DATABASES = {
@@ -221,6 +221,12 @@ LOGIN_URL = 'two_factor:login'
 # Redireciona para o dashboard após o login com sucesso
 LOGIN_REDIRECT_URL = 'core:dashboard'
 
+#
+# App internet_status
+#
 
 # Comando cliente Speedtest da Ookla
 OOKLA_CLI_COMMAND = env('OOKLA_CLI_COMMAND', default='erro')
+
+# Número de meses de retenção dos dados dos testes de conectividade e velocidade
+DATA_CLEANUP_RETENTION_MONTHS = env.int('DATA_CLEANUP_RETENTION_MONTHS', default=12)
