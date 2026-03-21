@@ -53,19 +53,14 @@ class InternetProviderAdmin(admin.ModelAdmin):
         }),
         ('Matriz de Decisão (Conectividade)', {
             'fields': (
-                'minimum_hosts_to_ping',
-                'unstable_packet_loss_threshold',
-                'unstable_latency_threshold',
-                'connection_drop_limit'
+                'connection_drop_limit',
             ),
-            'description': 'Parâmetros de avaliação para testes ICMP (O status HTTP 204 sobrepõe-se sempre de forma absoluta a estes limites para validar conectividade real).'
+            'description': 'Parâmetros de avaliação para testes de conectividade.'
         }),
         ('Limites e Alertas (Speedtest)', {
             'fields': (
                 'id_provider_speedtest',
-                'download_speed_expected_threshold',
                 'download_speed_minimum_threshold',
-                'upload_speed_expected_threshold',
                 'upload_speed_minimum_threshold',
                 'speed_drop_limit'
             ),

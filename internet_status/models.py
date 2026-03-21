@@ -38,21 +38,21 @@ class InternetProvider(models.Model):
         verbose_name="Frequência do Speedtest (CRON)",
         help_text="Ex: '0 * * * *' para a cada hora exata."
     )
-    minimum_hosts_to_ping = models.IntegerField(
-        null=False,
-        help_text="Minimum number of hosts to ping for status checks", default=3)
-    unstable_packet_loss_threshold = models.FloatField(
-        default=30.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        verbose_name="Limite de Perda de Pacotes (%)",
-        help_text="Percentual máximo de perda de pacotes ICMP aceitável antes de marcar como Instável."
-    )
-    unstable_latency_threshold = models.FloatField(
-        default=150.0,
-        validators=[MinValueValidator(1.0)],
-        verbose_name="Limite de Latência ICMP (ms)",
-        help_text="Latência média máxima permitida antes de marcar a conexão como Instável."
-    )
+    # minimum_hosts_to_ping = models.IntegerField(
+    #    null=False,
+    #    help_text="Minimum number of hosts to ping for status checks", default=3)
+    # unstable_packet_loss_threshold = models.FloatField(
+    #    default=30.0,
+    #    validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+    #    verbose_name="Limite de Perda de Pacotes (%)",
+    #    help_text="Percentual máximo de perda de pacotes ICMP aceitável antes de marcar como Instável."
+    # )
+    # unstable_latency_threshold = models.FloatField(
+    #    default=150.0,
+    #    validators=[MinValueValidator(1.0)],
+    #    verbose_name="Limite de Latência ICMP (ms)",
+    #    help_text="Latência média máxima permitida antes de marcar a conexão como Instável."
+    # )
     download_speed_minimum_threshold = models.FloatField(
         validators=[
             MinValueValidator(1.0),  
@@ -60,13 +60,6 @@ class InternetProvider(models.Model):
         ],
         null=False,
         help_text="Minimum acceptable download speed in Mbps")
-    download_speed_expected_threshold = models.FloatField(
-        validators=[
-            MinValueValidator(1.0),  
-            MaxValueValidator(10000.0)
-        ],
-        null=False,
-        help_text="Expected download speed in Mbps")
     upload_speed_minimum_threshold = models.FloatField(
         validators=[
             MinValueValidator(1.0),  
@@ -74,25 +67,18 @@ class InternetProvider(models.Model):
         ],
         null=False,
         help_text="Minimum acceptable upload speed in Mbps")
-    upload_speed_expected_threshold = models.FloatField(
-        validators=[
-            MinValueValidator(1.0),  
-            MaxValueValidator(10000.0)  
-        ],
-        null=False,
-        help_text="Expected upload speed in Mbps")
     id_provider_speedtest = models.CharField(
         max_length=255, null=True, blank=True,
         help_text="Provider ID for speedtest.net (if applicable). https://williamyaps.github.io/wlmjavascript/servercli.html")
-    speed_drop_limit = models.IntegerField(
-        default=3,
-        verbose_name="Limite de Quedas de Velocidade",
-        help_text="Número de testes de velocidade consecutivos abaixo de 100Mbps para disparar alerta."
-    )
     connection_drop_limit = models.IntegerField(
         default=5,
         verbose_name="Limite de Falhas de Conexão",
         help_text="Número de testes de conectividade consecutivos com falha/instabilidade para disparar alerta."
+    )
+    speed_drop_limit = models.IntegerField(
+        default=3,
+        verbose_name="Limite de Quedas de Velocidade",
+        help_text="Número de testes de velocidade consecutivos abaixo de 100Mbps para disparar alerta."
     )
     destination_emails = models.CharField(
         max_length=255,

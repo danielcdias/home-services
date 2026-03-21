@@ -3,8 +3,6 @@ import ping3
 import requests
 import subprocess
 import json
-import os
-import shlex
 
 from typing import Tuple
 from datetime import timedelta
@@ -17,7 +15,7 @@ from django.utils import timezone
 from core.util import SingletonMeta, log_error
 from internet_status.models import (
     InternetProvider, HostsToPing, ConnectionStatus, ConnectionSpeed, StatusChoices,
-    DailyStatusSummary, DailySpeedSummary
+    DailyStatusSummary, DailySpeedSummary, CheckTypeChoices
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +25,11 @@ class InternetCheck(metaclass=SingletonMeta):
 
     def check_internet_status(self):
         providers: list[InternetProvider] = self._get_hosts()
+        
+        if not providers.exists():
+            logger.warning("Nenhum InternetProvider habilitado encontrado. Status geral: UNKNOWN.")
+            return
+
         for provider in providers:
             status, ping_results = self._ping(provider)
             if not self._save_ping_results(provider, ping_results, status):
@@ -48,45 +51,60 @@ class InternetCheck(metaclass=SingletonMeta):
         return result
 
     def _ping(self, provider: InternetProvider) -> Tuple[str, dict]:
-        hosts: list[HostsToPing] = provider.hosts_to_ping.filter(enabled=True)
+        hosts = provider.hosts_to_ping.filter(enabled=True)
         results = {'success': [], 'error': []}
-        
-        for host in hosts:
-            try:
-                # ping3.ping returns delay in seconds or None/False on failure
-                delay = ping3.ping(host.hostname_or_ipaddress, timeout=2)
-                if delay:
-                    results['success'].append({
-                        'host': host.hostname_or_ipaddress,
-                        'name': host.name,
-                        'delay': round(delay * 1000, 2)
-                    })
-                else:
-                    results['error'].append({
-                        'host': host.hostname_or_ipaddress,
-                        'name': host.name,
-                        'reason': 'timeout'
-                    })
-            except Exception as e:
-                results['error'].append({
-                    'host': host.hostname_or_ipaddress,
-                    'name': host.name,
-                    'reason': str(e)
-                })
 
-        total_hosts = len(hosts)
-        if total_hosts == 0:
+        # Regra UNKNOWN: Menos de 2 hosts de cada tipo (ICMP e HTTP)
+        icmp_hosts = hosts.filter(check_type=CheckTypeChoices.ICMP_PING)
+        http_hosts = hosts.filter(check_type=CheckTypeChoices.HTTP_204)
+
+        if icmp_hosts.count() < 2 or http_hosts.count() < 2:
+            logger.info(f"Provider {provider.name} possui hosts insuficientes (Min: 2 ICMP, 2 HTTP). Status: UNKNOWN.")
             return StatusChoices.UNKNOWN, results
 
-        error_count = len(results['error'])
-        error_percentage = error_count / total_hosts
+        for host in hosts:
+            success = False
+            detail = {}
+            try:
+                if host.check_type == CheckTypeChoices.HTTP_204:
+                    # Teste HTTP 204
+                    response = requests.get(host.hostname_or_ipaddress, timeout=5)
+                    # 204 No Content é o esperado, mas aceitamos a faixa 2xx
+                    if response.status_code == 204 or (200 <= response.status_code < 300):
+                        success = True
+                        detail = {'delay': round(response.elapsed.total_seconds() * 1000, 2)}
+                    else:
+                        detail = {'reason': f'HTTP Status {response.status_code}'}
+                else:
+                    # Teste ICMP Ping
+                    delay = ping3.ping(host.hostname_or_ipaddress, timeout=2)
+                    if delay:
+                        success = True
+                        detail = {'delay': round(delay * 1000, 2)}
+                    else:
+                        detail = {'reason': 'timeout'}
+            except Exception as e:
+                detail = {'reason': str(e)}
 
-        if error_percentage >= float(provider.status_ping_error_disconnected_threshold):
-            status = StatusChoices.DISCONNECTED
-        elif error_percentage >= float(provider.status_ping_error_unstable_threshold):
-            status = StatusChoices.UNSTABLE
-        else:
+            entry = {'host': host.hostname_or_ipaddress, 'name': host.name, 'type': host.check_type}
+            entry.update(detail)
+
+            if success:
+                results['success'].append(entry)
+            else:
+                results['error'].append(entry)
+
+        total_tests = hosts.count()
+        success_count = len(results['success'])
+
+        # Regras Determinísticas de Status:
+        if success_count == total_tests:
             status = StatusChoices.CONNECTED
+        elif success_count == 0:
+            status = StatusChoices.DISCONNECTED
+        else:
+            # Pelo menos um falhou, mas pelo menos um funcionou
+            status = StatusChoices.UNSTABLE
 
         return status, results
 
