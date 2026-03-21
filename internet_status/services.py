@@ -51,60 +51,101 @@ class InternetCheck(metaclass=SingletonMeta):
         return result
 
     def _ping(self, provider: InternetProvider) -> Tuple[str, dict]:
-        hosts = provider.hosts_to_ping.filter(enabled=True)
-        results = {'success': [], 'error': []}
+        hosts: list[HostsToPing] = provider.hosts_to_ping.filter(enabled=True)
+        
+        # Estrutura de dados original para garantir compatibilidade com a UI (views.py)
+        results = {
+            "thresholds": {
+                "reason": "",
+                "calculation": {
+                    "http_total": 0,
+                    "icmp_total": 0,
+                    "http_success": 0,
+                    "icmp_loss_pct": 0,
+                    "avg_icmp_latency": 0
+                }
+            },
+            "tests_results": []
+        }
 
-        # Regra UNKNOWN: Menos de 2 hosts de cada tipo (ICMP e HTTP)
+        # Regra UNKNOWN: Mínimo de 2 hosts de cada tipo (ICMP e HTTP)
         icmp_hosts = hosts.filter(check_type=CheckTypeChoices.ICMP_PING)
         http_hosts = hosts.filter(check_type=CheckTypeChoices.HTTP_204)
 
         if icmp_hosts.count() < 2 or http_hosts.count() < 2:
-            logger.info(f"Provider {provider.name} possui hosts insuficientes (Min: 2 ICMP, 2 HTTP). Status: UNKNOWN.")
+            results["thresholds"]["reason"] = "UNKNOWN: Hosts insuficientes cadastrados (Min: 2 ICMP, 2 HTTP)."
             return StatusChoices.UNKNOWN, results
 
+        icmp_latencies = []
+        http_success_count = 0
+        
         for host in hosts:
             success = False
-            detail = {}
+            result_val = None
+            exception_msg = None
+            
             try:
                 if host.check_type == CheckTypeChoices.HTTP_204:
+                    results["thresholds"]["calculation"]["http_total"] += 1
                     # Teste HTTP 204
                     response = requests.get(host.hostname_or_ipaddress, timeout=5)
-                    # 204 No Content é o esperado, mas aceitamos a faixa 2xx
+                    result_val = round(response.elapsed.total_seconds() * 1000, 2)
                     if response.status_code == 204 or (200 <= response.status_code < 300):
                         success = True
-                        detail = {'delay': round(response.elapsed.total_seconds() * 1000, 2)}
+                        http_success_count += 1
                     else:
-                        detail = {'reason': f'HTTP Status {response.status_code}'}
+                        exception_msg = f"HTTP Status {response.status_code}"
                 else:
+                    results["thresholds"]["calculation"]["icmp_total"] += 1
                     # Teste ICMP Ping
+                    # ping3.ping returns delay in seconds or None/False on failure
                     delay = ping3.ping(host.hostname_or_ipaddress, timeout=2)
                     if delay:
                         success = True
-                        detail = {'delay': round(delay * 1000, 2)}
+                        result_val = round(delay * 1000, 2)
+                        icmp_latencies.append(result_val)
                     else:
-                        detail = {'reason': 'timeout'}
+                        exception_msg = "timeout"
             except Exception as e:
-                detail = {'reason': str(e)}
+                exception_msg = str(e)
 
-            entry = {'host': host.hostname_or_ipaddress, 'name': host.name, 'type': host.check_type}
-            entry.update(detail)
+            # Popula tests_results para consumo direto do frontend/UI
+            results["tests_results"].append({
+                "name": host.name,
+                "result": result_val,
+                "success": success,
+                "exception": exception_msg,
+                "check_type": "HTTP" if host.check_type == CheckTypeChoices.HTTP_204 else "ICMP",
+                "hostname_or_ipaddress": host.hostname_or_ipaddress
+            })
 
-            if success:
-                results['success'].append(entry)
-            else:
-                results['error'].append(entry)
+        # Processamento dos cálculos para o dicionário calculation
+        total_icmp = results["thresholds"]["calculation"]["icmp_total"]
+        icmp_success = len(icmp_latencies)
+        
+        avg_latency = round(sum(icmp_latencies) / icmp_success, 2) if icmp_success > 0 else 0
+        loss_pct = round(((total_icmp - icmp_success) / total_icmp) * 100, 2) if total_icmp > 0 else 0
+        
+        results["thresholds"]["calculation"]["http_success"] = http_success_count
+        results["thresholds"]["calculation"]["icmp_loss_pct"] = loss_pct
+        results["thresholds"]["calculation"]["avg_icmp_latency"] = avg_latency
 
+        # Regras Determinísticas de Status solicitadas:
+        # CONNECTED: Todos os testes retornaram sucesso.
+        # DISCONNECTED: Todos os testes falharam.
+        # UNSTABLE: Ao menos um teste de conectividade falhou (mas não todos).
         total_tests = hosts.count()
-        success_count = len(results['success'])
+        total_success = http_success_count + icmp_success
 
-        # Regras Determinísticas de Status:
-        if success_count == total_tests:
+        if total_success == total_tests:
             status = StatusChoices.CONNECTED
-        elif success_count == 0:
+            results["thresholds"]["reason"] = "NORMAL: Conectividade validada com sucesso em todos os testes."
+        elif total_success == 0:
             status = StatusChoices.DISCONNECTED
+            results["thresholds"]["reason"] = "CRITICAL: Falha total em todos os testes de conectividade."
         else:
-            # Pelo menos um falhou, mas pelo menos um funcionou
             status = StatusChoices.UNSTABLE
+            results["thresholds"]["reason"] = "WARNING: Conectividade parcial detectada (instabilidade)."
 
         return status, results
 
@@ -297,10 +338,9 @@ def run_internet_cleanup_task():
     from internet_status.services import InternetCleanup
     
     logger = logging.getLogger(__name__)
-    logger.info(">>> [SCHEDULER] Executando a tarefa de limpeza via atalho...")
     
     try:
         InternetCleanup().run_monthly_cleanup()
-        logger.info(">>> [SCHEDULER] Tarefa de limpeza finalizada com sucesso.")
+        logger.info("[SCHEDULER] Tarefa de limpeza finalizada com sucesso.")
     except Exception as e:
-        logger.error(f">>> [SCHEDULER] Falha crítica na execução da limpeza: {str(e)}")
+        logger.error(f"[SCHEDULER] Falha crítica na execução da limpeza: {str(e)}")
