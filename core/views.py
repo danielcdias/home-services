@@ -2,8 +2,10 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render, redirect
+from django.utils import timezone
 
 from internet_status.models import InternetProvider
+from internet_status.services import InternetCheck
 
 
 def index_view(request: HttpRequest) -> HttpResponse:
@@ -20,6 +22,8 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     providers = InternetProvider.objects.filter(enabled=True)
     provider_data = []
+    now = timezone.now()
+    checker = InternetCheck()
 
     # Mapeamento de status para as classes de cor do Bootstrap
     status_colors = {
@@ -53,6 +57,7 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
             'latest_speed': latest_speed,
             'color_class': status_colors.get(current_status, 'secondary'),
             'status_label': status_labels.get(current_status, 'Sem dados'),
+            'monthly': checker.get_monthly_indicators(provider, now.year, now.month)
         })
 
     context = {

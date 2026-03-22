@@ -60,6 +60,21 @@
                 </span>
               </div>
             </div>
+
+            <div class="row text-center border-top pt-3 mt-4">
+              <div class="col-4 border-end">
+                <small class="text-muted d-block small">Conectividade</small>
+                <span class="fw-bold">{{ data.monthly.connectivity }}%</span>
+              </div>
+              <div class="col-4 border-end">
+                <small class="text-muted d-block small">Média Download</small>
+                <span class="fw-bold text-primary">{{ data.monthly.download|floatformat:0 }}</span>
+              </div>
+              <div class="col-4">
+                <small class="text-muted d-block small">Média Upload</small>
+                <span class="fw-bold text-info">{{ data.monthly.upload|floatformat:0 }}</span>
+              </div>
+            </div>
           </div>
 
           <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between align-items-center">

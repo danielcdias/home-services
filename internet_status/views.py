@@ -11,6 +11,7 @@ from .models import (
     InternetProvider, StatusChoices, ConnectionStatus, ConnectionSpeed,
     DailyStatusSummary, DailySpeedSummary
 )
+from .services import InternetCheck
 
 
 def format_duration(td: datetime.timedelta) -> str:
@@ -97,6 +98,11 @@ def provider_details(request: HttpRequest, provider_id: Any) -> HttpResponse:
     selected_label: str = f"{MONTH_NAMES[selected_month]} {selected_year}"
     filename_label: str = f"{MONTH_NAMES[selected_month]}_{selected_year}"
 
+    # --- INDICADORES MENSAIS (KPIs) ---
+    monthly_indicators = InternetCheck().get_monthly_indicators(
+        provider, selected_year, selected_month
+    )
+
     # --- 2. CONSULTAS BASE PARA O MÊS SELECIONADO ---
     monthly_speeds_qs = provider.connection_speeds.filter(
         last_tested__year=selected_year, last_tested__month=selected_month
@@ -163,7 +169,6 @@ def provider_details(request: HttpRequest, provider_id: Any) -> HttpResponse:
             daily_unst_pct[idx] = round(float(s.unstable_pct), 1)
             daily_disc_pct[idx] = round(float(s.disconnected_pct), 1)
     else:
-        # LÓGICA ORIGINAL EXATAMENTE COMO VOCÊ ENVIOU
         daily_speed_counts: list[int] = [0] * num_days
         daily_down_achieved_counts: list[int] = [0] * num_days
         daily_up_achieved_counts: list[int] = [0] * num_days
@@ -294,6 +299,7 @@ def provider_details(request: HttpRequest, provider_id: Any) -> HttpResponse:
         'contracted_up': contracted_up,
         'min_down': min_down,
         'min_up': min_up,
+        'monthly': monthly_indicators,
         'available_years': available_years,
         'selected_year': selected_year,
         'available_months': available_months,
