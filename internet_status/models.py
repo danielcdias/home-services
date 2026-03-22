@@ -38,38 +38,23 @@ class InternetProvider(models.Model):
         verbose_name="Frequência do Speedtest (CRON)",
         help_text="Ex: '0 * * * *' para a cada hora exata."
     )
-    # minimum_hosts_to_ping = models.IntegerField(
-    #    null=False,
-    #    help_text="Minimum number of hosts to ping for status checks", default=3)
-    # unstable_packet_loss_threshold = models.FloatField(
-    #    default=30.0,
-    #    validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-    #    verbose_name="Limite de Perda de Pacotes (%)",
-    #    help_text="Percentual máximo de perda de pacotes ICMP aceitável antes de marcar como Instável."
-    # )
-    # unstable_latency_threshold = models.FloatField(
-    #    default=150.0,
-    #    validators=[MinValueValidator(1.0)],
-    #    verbose_name="Limite de Latência ICMP (ms)",
-    #    help_text="Latência média máxima permitida antes de marcar a conexão como Instável."
-    # )
     download_speed_minimum_threshold = models.FloatField(
         validators=[
             MinValueValidator(1.0),  
             MaxValueValidator(10000.0)  
         ],
         null=False,
-        help_text="Minimum acceptable download speed in Mbps")
+        help_text="Referência de velocidade de download mínima aceitável in Mbps.")
     upload_speed_minimum_threshold = models.FloatField(
         validators=[
             MinValueValidator(1.0),  
             MaxValueValidator(10000.0)
         ],
         null=False,
-        help_text="Minimum acceptable upload speed in Mbps")
+        help_text="Referência de velocidade de upload mínima aceitável in Mbps.")
     id_provider_speedtest = models.CharField(
         max_length=255, null=True, blank=True,
-        help_text="Provider ID for speedtest.net (if applicable). https://williamyaps.github.io/wlmjavascript/servercli.html")
+        help_text="ID do provedor do speedtest.net (se aplicável). https://williamyaps.github.io/wlmjavascript/servercli.html")
     connection_drop_limit = models.IntegerField(
         default=5,
         verbose_name="Limite de Falhas de Conexão",
@@ -229,3 +214,26 @@ class DailySpeedSummary(models.Model):
 
     def __str__(self):
         return f"{self.provider.name} - {self.date}: {self.avg_download} Mbps"
+
+
+class MonthlyInternetSummary(models.Model):
+    """
+    Armazena indicadores consolidados por mês para performance e histórico.
+    """
+    provider = models.ForeignKey(
+        InternetProvider, on_delete=models.CASCADE, related_name='monthly_summaries')
+    year = models.IntegerField()
+    month = models.IntegerField()
+    avg_connectivity = models.FloatField(help_text="Percentual médio de conectividade")
+    avg_download = models.FloatField(help_text="Velocidade média de download (Mbps)")
+    avg_upload = models.FloatField(help_text="Velocidade média de upload (Mbps)")
+    download_pct_contracted = models.FloatField(help_text="% do download contratado")
+    upload_pct_contracted = models.FloatField(help_text="% do upload contratado")
+
+    class Meta:
+        unique_together = ('provider', 'year', 'month')
+        verbose_name = "Resumo Mensal de Internet"
+        verbose_name_plural = "Resumos Mensais de Internet"
+
+    def __str__(self):
+        return f"{self.provider.name} - {self.month}/{self.year}"

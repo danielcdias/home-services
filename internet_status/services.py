@@ -5,17 +5,18 @@ import subprocess
 import json
 
 from typing import Tuple
-from datetime import timedelta
+from datetime import timedelta, date
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Case, When, Value, FloatField
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
 from core.util import SingletonMeta, log_error
 from internet_status.models import (
     InternetProvider, HostsToPing, ConnectionStatus, ConnectionSpeed, StatusChoices,
-    DailyStatusSummary, DailySpeedSummary, CheckTypeChoices
+    DailyStatusSummary, DailySpeedSummary, CheckTypeChoices, MonthlyInternetSummary
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,51 @@ class InternetCheck(metaclass=SingletonMeta):
             speed_results = self._speedtest_official_cli(provider)
             if not self._save_speed_results(provider, speed_results):
                 logger.error(f"Erro salvando resultado do speedtest para provider {provider.name}.")
+
+    def get_monthly_indicators(self, provider, year, month):
+        """
+        Calcula os indicadores mensais: conectividade e médias de velocidade.
+        Considera dados sumarizados para meses fechados ou brutos para o mês corrente.
+        """
+        # Tenta buscar no resumo (mês fechado)
+        summary = MonthlyInternetSummary.objects.filter(
+            provider=provider, year=year, month=month
+        ).first()
+
+        if summary:
+            return {
+                'connectivity': summary.avg_connectivity,
+                'download': summary.avg_download,
+                'upload': summary.avg_upload,
+                'download_pct': summary.download_pct_contracted,
+                'upload_pct': summary.upload_pct_contracted
+            }
+
+        # Cálculo para mês aberto (dados brutos)
+        status_qs = ConnectionStatus.objects.filter(
+            provider=provider, last_checked__year=year, last_checked__month=month
+        ).aggregate(
+            avg_conn=Avg(Case(When(status=StatusChoices.CONNECTED, then=Value(1.0)),
+                         default=Value(0.0), output_field=FloatField()))
+        )
+
+        speed_qs = ConnectionSpeed.objects.filter(
+            provider=provider, last_tested__year=year, last_tested__month=month
+        ).aggregate(avg_down=Avg('download_speed'), avg_up=Avg('upload_speed'))
+
+        conn = (status_qs['avg_conn'] or 0) * 100
+        down = speed_qs['avg_down'] or 0
+        up = speed_qs['avg_up'] or 0
+        c_down = float(provider.contracted_download_speed)
+        c_up = float(provider.contracted_upload_speed)
+
+        return {
+            'connectivity': round(conn, 2),
+            'download': round(down, 2),
+            'upload': round(up, 2),
+            'download_pct': round((down / c_down * 100), 2) if c_down > 0 else 0,
+            'upload_pct': round((up / c_up * 100), 2) if c_up > 0 else 0
+        }
 
     def _get_hosts(self) -> list[InternetProvider]:
         result: list[InternetProvider] = []
@@ -273,6 +319,65 @@ class InternetCleanup(metaclass=SingletonMeta):
         except Exception as ex:
             log_error(logger, "Erro na limpeza mensal", ex)
             raise ex
+
+    def run_monthly_summarization(self):
+        """
+        Gera o resumo consolidado para TODOS os meses passados que ainda 
+        não foram processados e que possuem dados no banco.
+        """
+        logger.info("Iniciando sumarização retroativa de indicadores mensais...")
+        
+        # Usamos timezone.now() para obter um datetime 'aware'
+        now = timezone.now()
+        first_day_current_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        providers = InternetProvider.objects.filter(enabled=True)
+        checker = InternetCheck()
+
+        for provider in providers:
+            # Identifica meses com dados de velocidade anteriores ao mês atual
+            speed_months = ConnectionSpeed.objects.filter(
+                provider=provider, 
+                last_tested__lt=first_day_current_month
+            ).annotate(
+                month_date=TruncMonth('last_tested')
+            ).values_list('month_date', flat=True).distinct()
+
+            # Identifica meses com dados de status anteriores ao mês atual
+            status_months = ConnectionStatus.objects.filter(
+                provider=provider, 
+                last_checked__lt=first_day_current_month
+            ).annotate(
+                month_date=TruncMonth('last_checked')
+            ).values_list('month_date', flat=True).distinct()
+
+            # Une as listas de meses únicos encontrados
+            all_months = sorted(list(set(list(speed_months) + list(status_months))))
+
+            for m_date in all_months:
+                year, month = m_date.year, m_date.month
+
+                # Verifica se já existe resumo para este provedor/mês/ano
+                exists = MonthlyInternetSummary.objects.filter(
+                    provider=provider, year=year, month=month
+                ).exists()
+
+                if not exists:
+                    logger.info(f"Sumarizando dados para {provider.name}: {month}/{year}")
+                    m = checker.get_monthly_indicators(provider, year, month)
+                    
+                    # Cria o resumo se houver qualquer dado relevante
+                    if m['connectivity'] > 0 or m['download'] > 0:
+                        MonthlyInternetSummary.objects.create(
+                            provider=provider,
+                            year=year,
+                            month=month,
+                            avg_connectivity=m['connectivity'],
+                            avg_download=m['download'],
+                            avg_upload=m['upload'],
+                            download_pct_contracted=m['download_pct'],
+                            upload_pct_contracted=m['upload_pct']
+                        )
 
     def _summarize_status(self, limit_date):
         # Filtra tudo mais antigo que a data limite

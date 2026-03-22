@@ -53,6 +53,30 @@
     </p>
   </div>
 
+  <div class="row mb-4">
+    <div class="col-md-4 mb-3">
+      <div class="card bg-body-tertiary border-0 shadow-sm h-100 text-center p-3">
+        <h6 class="text-muted mb-2">Conectividade no Período</h6>
+        <h3 class="mb-0 fw-bold">{{ monthly.connectivity }}%</h3>
+        <small class="text-muted">Disponibilidade de rede</small>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card bg-body-tertiary border-0 shadow-sm h-100 text-center p-3">
+        <h6 class="text-muted mb-2">Download Médio</h6>
+        <h3 class="mb-0 text-primary fw-bold">{{ monthly.download|floatformat:1 }} <small class="fs-6">Mbps</small></h3>
+        <small class="text-muted">{{ monthly.download_pct }}% da meta contratada</small>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card bg-body-tertiary border-0 shadow-sm h-100 text-center p-3">
+        <h6 class="text-muted mb-2">Upload Médio</h6>
+        <h3 class="mb-0 text-info fw-bold">{{ monthly.upload|floatformat:1 }} <small class="fs-6">Mbps</small></h3>
+        <small class="text-muted">{{ monthly.upload_pct }}% da meta contratada</small>
+      </div>
+    </div>
+  </div>
+
   <div id="relatorio-conteudo" class="bg-body-tertiary p-2 p-md-4 rounded">
     <div class="row">
       <div class="col-12 mb-4">
@@ -165,7 +189,6 @@
                     {% for speed in summaries_speed %}
                       <tr>
                         <td class="small align-middle">{{ speed.date|date:'d/m/Y' }} (Média Diária)</td>
-
                         <td class="align-middle 
                           {% if speed.avg_download >= provider.contracted_download_speed %}
                             
@@ -180,7 +203,6 @@
                             text-danger fw-bold
 
                           {% endif %}">{{ speed.avg_download|floatformat:1 }} Mbps</td>
-
                         <td class="align-middle 
                           {% if speed.avg_upload >= provider.contracted_upload_speed %}
                             
@@ -195,7 +217,6 @@
                             text-danger fw-bold
 
                           {% endif %}">{{ speed.avg_upload|floatformat:1 }} Mbps</td>
-
                         <td class="align-middle">{{ speed.avg_latency|floatformat:1 }} ms</td>
                       </tr>
                     {% empty %}
@@ -207,7 +228,6 @@
                     {% for speed in monthly_speeds %}
                       <tr class="dcd-tooltip-row">
                         <td class="small align-middle">{{ speed.last_tested|date:'d/m/Y H:i' }}</td>
-
                         <td class="align-middle 
                           {% if speed.download_speed >= provider.contracted_download_speed %}
                             
@@ -222,7 +242,6 @@
                             text-danger fw-bold
 
                           {% endif %}">{{ speed.download_speed }} Mbps</td>
-
                         <td class="align-middle 
                           {% if speed.upload_speed >= provider.contracted_upload_speed %}
                             
@@ -237,9 +256,7 @@
                             text-danger fw-bold
 
                           {% endif %}">{{ speed.upload_speed }} Mbps</td>
-
                         <td class="align-middle">{{ speed.latency }} ms</td>
-
                         <td class="d-none">
                           <div class="tooltip-content-html">
                             {% with result=speed.full_results.test_result %}
