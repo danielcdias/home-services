@@ -352,13 +352,13 @@
                         <td class="small align-middle">{{ ping.last_checked|date:'d/m/Y H:i' }}</td>
                         <td class="align-middle">
                           {% if ping.status == 'connected' %}
-                            <span class="text-success fw-bold">Conectado</span>
+                            <span class="badge text-bg-success">Conectado</span>
                           {% elif ping.status == 'unstable' %}
-                            <span class="text-warning fw-bold">Instável</span>
+                            <span class="badge text-bg-warning">Instável</span>
                           {% elif ping.status == 'disconnected' %}
-                            <span class="text-danger fw-bold">Desconectado</span>
+                            <span class="badge text-bg-danger">Desconectado</span>
                           {% else %}
-                            <span class="text-secondary fw-bold">Desconhecido</span>
+                            <span class="badge text-bg-secondary">Desconhecido</span>
                           {% endif %}
                         </td>
 
