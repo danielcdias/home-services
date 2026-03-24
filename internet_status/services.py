@@ -119,7 +119,7 @@ class InternetCheck(metaclass=SingletonMeta):
         http_hosts = hosts.filter(check_type=CheckTypeChoices.HTTP_204)
 
         if icmp_hosts.count() < 2 or http_hosts.count() < 2:
-            results["thresholds"]["reason"] = "UNKNOWN: Hosts insuficientes cadastrados (Min: 2 ICMP, 2 HTTP)."
+            results["thresholds"]["reason"] = "Hosts insuficientes cadastrados (Min: 2 ICMP, 2 HTTP)."
             return StatusChoices.UNKNOWN, results
 
         icmp_latencies = []
@@ -185,13 +185,13 @@ class InternetCheck(metaclass=SingletonMeta):
 
         if total_success == total_tests:
             status = StatusChoices.CONNECTED
-            results["thresholds"]["reason"] = "NORMAL: Conectividade validada com sucesso em todos os testes."
+            results["thresholds"]["reason"] = "Conectividade validada com sucesso em todos os testes."
         elif total_success == 0:
             status = StatusChoices.DISCONNECTED
-            results["thresholds"]["reason"] = "CRITICAL: Falha total em todos os testes de conectividade."
+            results["thresholds"]["reason"] = "Falha total em todos os testes de conectividade."
         else:
             status = StatusChoices.UNSTABLE
-            results["thresholds"]["reason"] = "WARNING: Conectividade parcial detectada (instabilidade)."
+            results["thresholds"]["reason"] = "Conectividade parcial detectada (instabilidade)."
 
         return status, results
 
