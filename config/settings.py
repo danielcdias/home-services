@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 
 
-LOCAL_DEV_ENV = os.environ.get('DEV_ENV', False)
+LOCAL_DEV_ENV = os.environ.get('LOCAL_DEV_ENV', False)
 
 env = environ.Env(
     DEBUG=(bool, False),
