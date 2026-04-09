@@ -190,3 +190,6 @@ fixtures.json
 scheduler_heartbeat.lock
 shared/reload_scheduler.flag
 reload_scheduler.flag
+
+# Temporary folder
+tmp/
