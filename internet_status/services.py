@@ -114,12 +114,9 @@ class InternetCheck(metaclass=SingletonMeta):
             "tests_results": []
         }
 
-        # Regra UNKNOWN: Mínimo de 2 hosts de cada tipo (ICMP e HTTP)
-        icmp_hosts = hosts.filter(check_type=CheckTypeChoices.ICMP_PING)
-        http_hosts = hosts.filter(check_type=CheckTypeChoices.HTTP_204)
-
-        if icmp_hosts.count() < 2 or http_hosts.count() < 2:
-            results["thresholds"]["reason"] = "Hosts insuficientes cadastrados (Min: 2 ICMP, 2 HTTP)."
+        # Requisito Mínimo Flexibilizado: Mínimo de 2 hosts ativos no total para realizar a medição
+        if hosts.count() < 2:
+            results["thresholds"]["reason"] = f"Hosts insuficientes cadastrados (Min: 2 ativos no total. Cadastrados/Ativos: {hosts.count()})."
             return StatusChoices.UNKNOWN, results
 
         icmp_latencies = []
@@ -176,22 +173,23 @@ class InternetCheck(metaclass=SingletonMeta):
         results["thresholds"]["calculation"]["icmp_loss_pct"] = loss_pct
         results["thresholds"]["calculation"]["avg_icmp_latency"] = avg_latency
 
-        # Regras Determinísticas de Status solicitadas:
-        # CONNECTED: Todos os testes retornaram sucesso.
-        # DISCONNECTED: Todos os testes falharam.
-        # UNSTABLE: Ao menos um teste de conectividade falhou (mas não todos).
+        # Nova Lógica de Atribuição de Status (Percentual de Sucesso):
+        # - CONNECTED: Taxa de sucesso >= 66% (Tolerância a falhas de hosts de teste individuais)
+        # - DISCONNECTED: Taxa de sucesso == 0%
+        # - UNSTABLE: Taxa de sucesso entre 0% e 66% (exclusivo)
         total_tests = hosts.count()
         total_success = http_success_count + icmp_success
+        success_rate = (total_success / total_tests) * 100 if total_tests > 0 else 0
 
-        if total_success == total_tests:
-            status = StatusChoices.CONNECTED
-            results["thresholds"]["reason"] = "Conectividade validada com sucesso em todos os testes."
-        elif total_success == 0:
+        if total_success == 0:
             status = StatusChoices.DISCONNECTED
-            results["thresholds"]["reason"] = "Falha total em todos os testes de conectividade."
+            results["thresholds"]["reason"] = f"Falha total em todos os {total_tests} testes de conectividade executados."
+        elif success_rate >= 66.0:
+            status = StatusChoices.CONNECTED
+            results["thresholds"]["reason"] = f"Conectividade validada com sucesso ({total_success}/{total_tests} testes bem-sucedidos, {success_rate:.1f}%)."
         else:
             status = StatusChoices.UNSTABLE
-            results["thresholds"]["reason"] = "Conectividade parcial detectada (instabilidade)."
+            results["thresholds"]["reason"] = f"Conectividade parcial/instável detectada ({total_success}/{total_tests} testes bem-sucedidos, {success_rate:.1f}%)."
 
         return status, results
 
