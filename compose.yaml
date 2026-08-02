@@ -9,6 +9,10 @@ services:
       context: .
       dockerfile: Containerfile
     image: home-services-appserver:latest
+    dns:
+      - ${DNS_PRIMARY:-8.8.8.8}
+      - ${DNS_SECONDARY:-1.1.1.1}
+      - ${DNS_TERTIARY:-9.9.9.9}
     command: ./django-entrypoint.sh
     env_file:
       - .env
@@ -33,6 +37,10 @@ services:
       context: .
       dockerfile: Containerfile
     image: home-services-appserver:latest
+    dns:
+      - ${DNS_PRIMARY:-8.8.8.8}
+      - ${DNS_SECONDARY:-1.1.1.1}
+      - ${DNS_TERTIARY:-9.9.9.9}
     command: python manage.py scheduler
     env_file:
       - .env
